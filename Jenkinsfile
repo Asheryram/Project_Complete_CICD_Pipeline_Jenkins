@@ -1,12 +1,15 @@
 pipeline {
     agent any
-    
+
+    parameters {
+        string(name: 'EC2_HOST', description: 'Public IP of the app server EC2 instance (from Terraform output: app_server_public_ip)')
+    }
+
     environment {
         DOCKER_IMAGE = "cicd-node-app"
         DOCKER_TAG = "${BUILD_NUMBER}"
         REGISTRY = "docker.io"
         REGISTRY_CREDS = credentials('registry_creds')
-        EC2_HOST = "YOUR_EC2_PUBLIC_IP_HERE"  // Replace with actual IP like "3.15.123.45"
         CONTAINER_NAME = "node-app"
     }
     

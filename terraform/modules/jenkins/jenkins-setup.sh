@@ -24,7 +24,6 @@ amazon-linux-extras install java-openjdk11 -y
 
 # Verify Java installation
 java -version
-echo "JAVA_HOME: $JAVA_HOME"
 
 # Add Jenkins repository and install
 echo "Adding Jenkins repository..."
@@ -38,10 +37,15 @@ yum install -y jenkins
 echo "Adding jenkins user to docker group..."
 usermod -a -G docker jenkins
 
+# Install Node.js (required for npm ci / npm test stages)
+echo "Installing Node.js..."
+curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
+yum install -y nodejs
+
 # Configure Jenkins admin password
 echo "Configuring Jenkins..."
 mkdir -p /var/lib/jenkins/init.groovy.d
-cat > /var/lib/jenkins/init.groovy.d/basic-security.groovy << 'EOF'
+cat > /var/lib/jenkins/init.groovy.d/basic-security.groovy << 'GROOVYEOF'
 #!groovy
 import jenkins.model.*
 import hudson.security.*
@@ -59,7 +63,7 @@ instance.setAuthorizationStrategy(strategy)
 instance.save()
 
 Jenkins.instance.getInjector().getInstance(AdminWhitelistRule.class).setMasterKillSwitch(false)
-EOF
+GROOVYEOF
 
 # Start Jenkins
 echo "Starting Jenkins service..."
@@ -68,7 +72,7 @@ systemctl enable jenkins
 
 # Wait for Jenkins to start
 echo "Waiting for Jenkins to start..."
-sleep 30
+sleep 60
 
 # Check Jenkins status
 systemctl status jenkins
