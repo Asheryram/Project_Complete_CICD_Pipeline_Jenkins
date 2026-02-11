@@ -1,0 +1,7 @@
+app_server_public_ip = "3.78.181.59"
+app_url = "http://3.78.181.59:5000"
+jenkins_public_ip = "3.125.7.216"
+jenkins_url = "http://3.125.7.216:8080"
+ssh_app_server = "ssh -i jenkins-cicd-pipeline-dev-keypair.pem ec2-user@3.78.181.59"
+ssh_jenkins = "ssh -i jenkins-cicd-pipeline-dev-keypair.pem ec2-user@3.125.7.216"
+vpc_id = "vpc-014b927cf846dba67"
