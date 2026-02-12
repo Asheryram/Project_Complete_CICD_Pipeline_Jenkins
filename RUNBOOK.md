@@ -1,224 +1,363 @@
-# CI/CD Pipeline Runbook
+# CI/CD Pipeline with Jenkins — Runbook
 
-## Quick Start Guide
+> **Stack:** Node.js app · Jenkins in Docker on EC2 · Docker Hub · SSH deploy
+>
+> ⚠️ **IP addresses change on every EC2 restart.** Check `infrastructure-outputs.txt` (or run `terraform output`) for the current IPs before each session. Replace `<JENKINS_IP>` and `<APP_IP>` throughout this guide with those values.
 
-### Step 1: EC2 Setup (5 minutes)
+---
+
+## Table of Contents
+
+1. [Architecture Overview](#1-architecture-overview)
+2. [Repository Structure](#2-repository-structure)
+3. [Jenkins Server — First-Time Setup](#3-jenkins-server--first-time-setup)
+4. [Configure the App Server](#4-configure-the-app-server)
+5. [Get the Initial Admin Password](#5-get-the-initial-admin-password)
+6. [Install Jenkins Plugins](#6-install-jenkins-plugins)
+7. [Add Jenkins Credentials](#7-add-jenkins-credentials)
+8. [Create the Pipeline Job](#8-create-the-pipeline-job)
+9. [Run the Pipeline](#9-run-the-pipeline)
+10. [Verify Deployment](#10-verify-deployment)
+11. [Updating the App Server IP](#11-updating-the-app-server-ip)
+12. [Troubleshooting](#12-troubleshooting)
+
+---
+
+## 1. Architecture Overview
+
+```
+Developer → GitHub → Jenkins container (EC2 <JENKINS_IP>:8080)
+                              │
+                        Pipeline Stages:
+                        1. Checkout
+                        2. Install (npm ci)
+                        3. Test (npm test)
+                        4. Docker Build & Tag
+                        5. Push to Docker Hub
+                        6. SSH Deploy → App Server (EC2 <APP_IP>)
+                                              │
+                                         Node App :3000
+```
+
+Get your current IPs before starting:
 
 ```bash
-# Connect to EC2
-ssh -i your-key.pem ec2-user@<EC2_IP>
+cat infrastructure-outputs.txt
+# or
+cd terraform && terraform output
+```
 
-# Install Docker
-sudo yum update -y && sudo yum install docker -y
-sudo systemctl start docker && sudo systemctl enable docker
+---
+
+## 2. Repository Structure
+
+```
+.
+├── app.js                  # Node.js application
+├── app.test.js             # Tests
+├── package.json            # Dependencies & scripts
+├── Dockerfile              # Container definition
+├── Jenkinsfile             # Pipeline definition
+├── setup-jenkins.sh        # Jenkins EC2 bootstrap (runs via Terraform user_data)
+└── terraform/              # Infrastructure
+```
+
+---
+
+## 3. Jenkins Server — First-Time Setup
+
+Jenkins is provisioned automatically by Terraform via `setup-jenkins.sh` as EC2 `user_data`. **You do not need to run anything manually** — by the time the instance is reachable, the script has already:
+
+- Installed Docker on the host
+- Pulled `jenkins/jenkins:lts` and started it with `--restart unless-stopped`
+- Mounted `/var/run/docker.sock` so pipeline stages can build and push images
+- Installed the Docker CLI and Node.js 18 inside the container
+- Exposed Jenkins on port `8080`
+
+To verify everything came up correctly after `terraform apply`:
+
+```bash
+ssh -i jenkins-cicd-pipeline-dev-keypair.pem ec2-user@<JENKINS_IP>
+
+# Container should show STATUS "Up X minutes"
+sudo docker ps
+
+# Review the setup log for any errors
+sudo cat /var/log/jenkins-setup.log
+```
+
+---
+
+## 4. Configure the App Server
+
+The app server only needs Docker. SSH in and run:
+
+```bash
+ssh -i jenkins-cicd-pipeline-dev-keypair.pem ec2-user@<APP_IP>
+```
+
+```bash
+sudo yum install -y docker
+sudo systemctl enable docker && sudo systemctl start docker
 sudo usermod -aG docker ec2-user
-
-# Logout and login again
-exit
-ssh -i your-key.pem ec2-user@<EC2_IP>
-
-# Verify Docker
-docker --version
+exit   # log out so the group change takes effect
 ```
 
-### Step 2: Jenkins Credentials (3 minutes)
+---
 
-**Jenkins → Manage Jenkins → Credentials → Global → Add Credentials**
+## 5. Get the Initial Admin Password
 
-1. **registry_creds**
-   - Type: Username with password
-   - Username: `<dockerhub-username>`
-   - Password: `<dockerhub-password>`
-   - ID: `registry_creds`
-
-2. **ec2_ssh**
-   - Type: SSH Username with private key
-   - Username: `ec2-user`
-   - Private Key: Enter directly (paste .pem content)
-   - ID: `ec2_ssh`
-
-### Step 3: Create Pipeline (2 minutes)
-
-1. Jenkins Dashboard → New Item
-2. Name: `CICD-Flask-Pipeline`
-3. Type: Pipeline → OK
-4. Configuration:
-   - **Pipeline section**:
-     - Definition: Pipeline script from SCM
-     - SCM: Git
-     - Repository URL: `https://github.com/<your-username>/<repo-name>.git`
-     - Branch: `*/main`
-     - Script Path: `Jenkinsfile`
-   
-5. **Add Parameter**:
-   - Check "This project is parameterized"
-   - Add String Parameter:
-     - Name: `EC2_HOST`
-     - Default: `<your-ec2-public-ip>`
-
-6. Save
-
-### Step 4: Run Pipeline (1 minute)
-
-1. Click "Build Now"
-2. Monitor Console Output
-3. Wait for SUCCESS
-
-### Step 5: Verify (1 minute)
+Jenkins generates a one-time password on first boot. Because Jenkins runs inside a container, retrieve it with `docker exec` — **not** from the host filesystem:
 
 ```bash
-# Test endpoints
-curl http://<EC2_IP>:5000/
-curl http://<EC2_IP>:5000/health
+ssh -i jenkins-cicd-pipeline-dev-keypair.pem ec2-user@<JENKINS_IP>
 
-# Or browser
-http://<EC2_IP>:5000/
+sudo docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
 ```
 
-## Pipeline Stages Explained
+> If the command returns "No such file or directory", Jenkins hasn't finished starting yet. Wait 30 seconds and try again, or check `sudo docker logs jenkins` to see where it is in the boot sequence.
 
-| Stage | Duration | Action | Output |
-|-------|----------|--------|--------|
-| Checkout | ~10s | Clone Git repo | Source code |
-| Install/Build | ~20s | Install Python deps | Dependencies ready |
-| Test | ~5s | Run unit tests | Test results |
-| Docker Build | ~30s | Build image | Docker image |
-| Push Image | ~40s | Push to registry | Image in registry |
-| Deploy | ~30s | SSH deploy to EC2 | Running container |
+---
 
-**Total Time**: ~2-3 minutes
+## 6. Install Jenkins Plugins
 
-## Common Issues & Solutions
+1. Open **`http://<JENKINS_IP>:8080`** in your browser.
+2. Paste the initial admin password from the step above.
+3. Choose **"Install suggested plugins"** and wait for completion.
+4. Create your admin user when prompted.
 
-### Issue 1: "Permission denied" on EC2
+Then install the additional required plugins via **Manage Jenkins → Plugins → Available plugins**:
+
+| Plugin | Purpose |
+|--------|---------|
+| `Pipeline` | Declarative pipeline support |
+| `Git` | Checkout from GitHub |
+| `Credentials Binding` | Inject secrets into the pipeline |
+| `Docker Pipeline` | `docker` steps in the Jenkinsfile |
+| `SSH Agent` | `sshagent` step for deployment |
+| `NodeJS` | Manage Node.js versions in Jenkins |
+
+Tick all checkboxes → **Install** → **"Restart Jenkins when no jobs are running"**.
+
+### Configure the NodeJS tool
+
+**Manage Jenkins → Tools → NodeJS → Add NodeJS**
+
+| Field | Value |
+|-------|-------|
+| Name | `nodejs-18` |
+| Version | `NodeJS 18.x` |
+
+Click **Save**.
+
+---
+
+## 7. Add Jenkins Credentials
+
+Navigate to: **Manage Jenkins → Credentials → System → Global credentials → Add Credential**
+
+### `registry_creds` — Docker Hub
+
+| Field | Value |
+|-------|-------|
+| Kind | `Username with password` |
+| Username | Your Docker Hub username |
+| Password | Your Docker Hub access token |
+| ID | `registry_creds` |
+
+> Generate a token at: hub.docker.com → Account Settings → Security → New Access Token
+
+### `ec2_ssh` — App Server SSH Key
+
+| Field | Value |
+|-------|-------|
+| Kind | `SSH Username with private key` |
+| Username | `ec2-user` |
+| Private Key | Enter directly → paste the full `.pem` file contents |
+| ID | `ec2_ssh` |
+
+Get the key content on your local machine:
+
 ```bash
-# Solution: Add Jenkins public key to EC2
-# Or ensure ec2_ssh credential has correct private key
+cat jenkins-cicd-pipeline-dev-keypair.pem
 ```
 
-### Issue 2: "Cannot connect to Docker daemon"
-```bash
-# On Jenkins server
-sudo usermod -aG docker jenkins
-sudo systemctl restart jenkins
+Paste everything including the `-----BEGIN` and `-----END` lines.
+
+---
+
+## 8. Create the Pipeline Job
+
+### Update the app server IP in the Jenkinsfile
+
+Because IPs change, the app server IP is set as an environment variable in `Jenkinsfile`. Update it whenever you reprovision:
+
+```groovy
+environment {
+    APP_SERVER_IP  = "<APP_IP>"   // ← update this when your IP changes
+    IMAGE_NAME     = "YOUR_DOCKERHUB_USERNAME/cicd-app"
+    ...
+}
 ```
 
-### Issue 3: Port 5000 not accessible
-```bash
-# Check EC2 Security Group
-# Add Inbound Rule: Custom TCP, Port 5000, Source 0.0.0.0/0
-```
-
-### Issue 4: Docker login fails
-```bash
-# Verify credentials in Jenkins
-# Test manually: docker login -u <username>
-```
-
-## Monitoring & Logs
-
-### Check container on EC2
-```bash
-ssh ec2-user@<EC2_IP>
-docker ps
-docker logs flask-app
-```
-
-### Jenkins Console Output
-- Click on build number → Console Output
-
-### Application Logs
-```bash
-docker logs -f flask-app
-```
-
-## Rollback Procedure
+Commit and push:
 
 ```bash
-# SSH to EC2
-ssh ec2-user@<EC2_IP>
-
-# Stop current container
-docker stop flask-app && docker rm flask-app
-
-# Run previous version
-docker run -d --name flask-app -p 5000:5000 <username>/cicd-flask-app:<previous-build-number>
+git add Jenkinsfile
+git commit -m "Update app server IP"
+git push
 ```
 
-## Cleanup Commands
+### Create the job in Jenkins
 
-### On EC2
+1. **Dashboard → New Item**
+2. Name: `cicd-pipeline` → select **Pipeline** → **OK**
+
+**General:**
+- ✅ Discard old builds → Max builds to keep: `5`
+
+**Build Triggers (optional):**
+- ✅ GitHub hook trigger for GITScm polling
+
+**Pipeline:**
+- Definition: `Pipeline script from SCM`
+- SCM: `Git`
+- Repository URL: `https://github.com/YOUR_USERNAME/YOUR_REPO.git`
+- Branch: `*/main`
+- Script Path: `Jenkinsfile`
+
+Click **Save**.
+
+---
+
+## 9. Run the Pipeline
+
+1. Click **"Build Now"** on the job page.
+2. Click the build number in Build History.
+3. Click **"Console Output"** to watch live.
+
+### Expected stages
+
+```
+Checkout         ✅
+Install          ✅  (npm ci)
+Test             ✅  (all tests passed)
+Docker Build     ✅  (tagged :N and :latest)
+Push Image       ✅  (pushed to Docker Hub)
+Deploy           ✅  (container running on app server)
+Post: cleanup    ✅
+```
+
+A successful run ends with:
+
+```
+Finished: SUCCESS
+Pipeline SUCCEEDED. App running at http://<APP_IP>:3000
+```
+
+---
+
+## 10. Verify Deployment
+
 ```bash
-# Stop and remove container
-docker stop flask-app && docker rm flask-app
-
-# Remove all images
-docker rmi $(docker images -q)
-
-# Full cleanup
-docker system prune -af
+curl http://<APP_IP>:3000
+curl http://<APP_IP>:3000/health
 ```
 
-### On Jenkins Server
+Verify the container on the app server:
+
 ```bash
-# Remove workspace
-rm -rf /var/lib/jenkins/workspace/CICD-Flask-Pipeline
+ssh -i jenkins-cicd-pipeline-dev-keypair.pem ec2-user@<APP_IP>
 
-# Clean Docker
-docker system prune -af
+docker ps                    # confirms cicd-app is running
+docker logs cicd-app -f      # live app logs
 ```
 
-## Security Checklist
+---
 
-- [ ] EC2 security group restricts SSH to your IP
-- [ ] Docker registry credentials stored securely in Jenkins
-- [ ] EC2 private key not committed to Git
-- [ ] Application runs as non-root user
-- [ ] Regular security updates on EC2
+## 11. Updating the App Server IP
 
-## Performance Optimization
+Every time EC2 instances are stopped and restarted, both IPs change. Checklist:
 
-1. **Use Docker layer caching** - Already implemented in Dockerfile
-2. **Parallel stages** - Can be added for independent tasks
-3. **Artifact caching** - Use Jenkins artifact storage
-4. **Multi-stage builds** - Reduce image size
+```
+1. cat infrastructure-outputs.txt        (or: cd terraform && terraform output)
+2. Update APP_SERVER_IP in Jenkinsfile
+3. git add Jenkinsfile && git commit -m "Update app IP" && git push
+4. Re-run the pipeline in Jenkins
+```
 
-## Maintenance
+The Jenkins UI URL also changes — always derive it from the current `<JENKINS_IP>:8080`.
 
-### Weekly
-- Check Jenkins disk space
-- Review pipeline logs
-- Update dependencies
+---
 
-### Monthly
-- Update Jenkins plugins
-- Patch EC2 instance
-- Rotate credentials
+## 12. Troubleshooting
 
-## Evidence Collection
+### Jenkins container is not running
 
-### Screenshots to capture:
-1. Jenkins pipeline success (Blue Ocean view)
-2. Console output showing all stages
-3. Docker Hub showing pushed image
-4. Browser showing application response
-5. EC2 terminal showing running container
-
-### Logs to save:
 ```bash
-# Jenkins console output
-# Save from Jenkins UI
+# Check if it exists but is stopped
+sudo docker ps -a
 
-# EC2 container logs
-docker logs flask-app > deployment-logs.txt
+# Check startup logs
+sudo docker logs jenkins
 
-# Docker images
-docker images > docker-images.txt
+# Check the Terraform bootstrap log for errors
+sudo cat /var/log/jenkins-setup.log
+
+# Start it manually if needed
+sudo docker start jenkins
 ```
 
-## Contact & Support
+### Jenkins UI not reachable
 
-- Jenkins Documentation: https://www.jenkins.io/doc/
-- Docker Documentation: https://docs.docker.com/
-- Flask Documentation: https://flask.palletsprojects.com/
-- AWS EC2 Documentation: https://docs.aws.amazon.com/ec2/
+Confirm the container is up (`sudo docker ps`) and that the EC2 security group allows inbound TCP 8080 from your IP.
+
+### Initial admin password file not found
+
+Jenkins runs inside the container — the password is never on the host filesystem. Always use:
+
+```bash
+sudo docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
+```
+
+### `docker: command not found` in pipeline
+
+The Docker CLI is installed inside the container by `setup-jenkins.sh`. If it's missing, install it manually:
+
+```bash
+sudo docker exec -u root jenkins bash -c "apt-get update -qq && apt-get install -y docker.io"
+```
+
+### SSH deploy fails: `Permission denied (publickey)`
+
+- Confirm `ec2_ssh` credential contains the correct full `.pem` contents.
+- Confirm the username is exactly `ec2-user`.
+- Test manually from inside the Jenkins container:
+
+```bash
+sudo docker exec -it jenkins ssh -o StrictHostKeyChecking=no ec2-user@<APP_IP> "docker ps"
+```
+
+### `npm: command not found` in pipeline
+
+Confirm the **NodeJS plugin** is installed and the `nodejs-18` tool is configured under **Manage Jenkins → Tools**. The Jenkinsfile must reference it:
+
+```groovy
+tools { nodejs 'nodejs-18' }
+```
+
+### Docker Hub push fails: `unauthorized`
+
+- Confirm the credential ID is exactly `registry_creds`.
+- Confirm `IMAGE_NAME` starts with your Docker Hub username.
+- Check the access token hasn't expired.
+
+### Tests fail in pipeline but pass locally
+
+```bash
+# Check Node version inside the container
+sudo docker exec jenkins node --version
+
+# Run tests manually in the workspace
+sudo docker exec jenkins bash -c "cd /var/jenkins_home/workspace/cicd-pipeline && npm ci && npm test"
+```
