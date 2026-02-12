@@ -140,8 +140,8 @@ curl -I http://$JENKINS_IP:8080
 # SSH into Jenkins server
 ssh -i ~/.ssh/your-key-pair.pem ec2-user@$JENKINS_IP
 
-# Get initial admin password
-sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+# Get initial admin password (Jenkins runs in Docker)
+sudo docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
 
 # Copy this password and exit
 exit

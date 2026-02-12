@@ -57,3 +57,9 @@ build/
 # Coverage
 coverage/
 .nyc_output/
+
+# Infrastructure outputs (contains dynamic IPs)
+infrastructure-outputs.txt
+
+# OS
+Thumbs.db

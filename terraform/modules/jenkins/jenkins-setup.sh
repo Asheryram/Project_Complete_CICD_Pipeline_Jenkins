@@ -17,7 +17,7 @@ sudo systemctl enable docker
 sudo usermod -a -G docker ec2-user
 
 # Install Node.js and Git on host (optional, for debugging)
-curl -fsSL https://rpm.nodesource.com/setup_16.x | sudo bash -
+curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
 sudo yum install -y nodejs git
 
 # Get the Docker group ID from the host so the container can use the socket
@@ -112,7 +112,7 @@ fi
 # Install Node.js inside the Jenkins container (matches host version)
 echo "Installing Node.js inside Jenkins container..."
 sudo docker exec -u root jenkins bash -c "
-  curl -fsSL https://deb.nodesource.com/setup_16.x | bash - &&
+  curl -fsSL https://deb.nodesource.com/setup_18.x | bash - &&
   apt-get install -y nodejs &&
   node --version &&
   npm --version &&

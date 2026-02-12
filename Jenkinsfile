@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     tools {
-        nodejs 'nodejs-18'  // ← Add this
+        nodejs 'nodejs-18'
     }
 
     parameters {
