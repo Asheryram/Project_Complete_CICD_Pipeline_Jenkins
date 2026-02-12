@@ -1,6 +1,5 @@
 const express = require('express');
 const app = express();
-const port = process.env.PORT || 5000;
 
 const deploymentTime = new Date().toISOString();
 const version = process.env.APP_VERSION || '1.0.0';
@@ -50,8 +49,12 @@ app.get('/health', (req, res) => {
     });
 });
 
-app.listen(port, '0.0.0.0', () => {
-    console.log(`Server running on port ${port}`);
-});
+// Only start server if this file is run directly (not imported for tests)
+if (require.main === module) {
+    const port = process.env.PORT || 5000;
+    app.listen(port, '0.0.0.0', () => {
+        console.log(`Server running on port ${port}`);
+    });
+}
 
 module.exports = app;
