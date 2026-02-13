@@ -4,6 +4,8 @@ Automated CI/CD pipeline that provisions AWS infrastructure with Terraform, runs
 
 ## Architecture
 
+![CI/CD Pipeline Architecture](architecture-diagram.png)
+
 ```
 Developer  →  GitHub  →  Jenkins (EC2 · Docker)  →  Docker Hub  →  App Server (EC2)
 
@@ -81,8 +83,8 @@ Open `http://<JENKINS_IP>:8080`, complete setup, then install these plugins:
 ### 5. Configure NodeJS Tool
 
 **Manage Jenkins → Tools → NodeJS → Add NodeJS**
-- Name: `nodejs-18`
-- Version: NodeJS 18.x
+- Name: `nodejs-20`
+- Version: NodeJS 20.x
 
 ### 6. Create Pipeline Job
 
@@ -148,7 +150,7 @@ Key variables in `terraform.tfvars`:
 | Initial password not found | Container still starting — wait 30s, retry |
 | `docker: command not found` in pipeline | Docker CLI missing in container — check `/var/log/jenkins-setup.log` |
 | SSH deploy: permission denied | Verify `ec2_ssh` credential has full `.pem` contents |
-| `npm: command not found` | Ensure NodeJS plugin installed + `nodejs-18` tool configured |
+| `npm: command not found` | Ensure NodeJS plugin installed + `nodejs-20` tool configured |
 | App not responding after deploy | `ssh ec2-user@<APP_IP> "docker ps && docker logs node-app"` |
 
 See [RUNBOOK.md](RUNBOOK.md) for comprehensive troubleshooting.

@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     tools {
-        nodejs 'nodejs-18'
+        nodejs 'nodejs-20'
     }
 
     parameters {
@@ -67,6 +67,9 @@ pipeline {
         }
         
         stage('Deploy') {
+            when {
+                expression { params.EC2_HOST?.trim() }
+            }
             steps {
                 echo 'Deploying to EC2...'
                 sshagent(['ec2_ssh']) {

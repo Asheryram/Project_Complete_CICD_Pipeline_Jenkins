@@ -1,4 +1,10 @@
 #!/bin/bash
+set -e
+
+# Log all output
+exec > >(tee /var/log/app-server-setup.log) 2>&1
+echo "Starting app server setup at $(date)"
+
 yum update -y
 yum install -y docker git
 

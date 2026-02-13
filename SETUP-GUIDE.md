@@ -70,7 +70,6 @@ cat > terraform.tfvars << EOF
 aws_region = "us-east-1"
 project_name = "cicd-pipeline"
 environment = "dev"
-key_name = "your-existing-key-pair-name"
 jenkins_admin_password = "SecurePassword123!"
 allowed_ips = ["$(curl -s ifconfig.me)/32"]
 jenkins_instance_type = "t3.medium"

@@ -68,12 +68,12 @@ cd terraform && terraform output
 
 ## 3. Jenkins Server — First-Time Setup
 
-Jenkins is provisioned automatically by Terraform via `setup-jenkins.sh` as EC2 `user_data`. **You do not need to run anything manually** — by the time the instance is reachable, the script has already:
+Jenkins is provisioned automatically by Terraform via `jenkins-setup.sh` (in `terraform/modules/jenkins/`) as EC2 `user_data`. **You do not need to run anything manually** — by the time the instance is reachable, the script has already:
 
 - Installed Docker on the host
 - Pulled `jenkins/jenkins:lts` and started it with `--restart unless-stopped`
 - Mounted `/var/run/docker.sock` so pipeline stages can build and push images
-- Installed the Docker CLI and Node.js 18 inside the container
+- Installed the Docker CLI and Node.js 20 inside the container
 - Exposed Jenkins on port `8080`
 
 To verify everything came up correctly after `terraform apply`:
@@ -147,8 +147,8 @@ Tick all checkboxes → **Install** → **"Restart Jenkins when no jobs are runn
 
 | Field | Value |
 |-------|-------|
-| Name | `nodejs-18` |
-| Version | `NodeJS 18.x` |
+| Name | `nodejs-20` |
+| Version | `NodeJS 20.x` |
 
 Click **Save**.
 
@@ -324,7 +324,7 @@ sudo docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword
 
 ### `docker: command not found` in pipeline
 
-The Docker CLI is installed inside the container by `setup-jenkins.sh`. If it's missing, install it manually:
+The Docker CLI is installed inside the container by `jenkins-setup.sh`. If it's missing, install it manually:
 
 ```bash
 sudo docker exec -u root jenkins bash -c "apt-get update -qq && apt-get install -y docker.io"
@@ -342,10 +342,10 @@ sudo docker exec -it jenkins ssh -o StrictHostKeyChecking=no ec2-user@<APP_IP> "
 
 ### `npm: command not found` in pipeline
 
-Confirm the **NodeJS plugin** is installed and the `nodejs-18` tool is configured under **Manage Jenkins → Tools**. The Jenkinsfile must reference it:
+Confirm the **NodeJS plugin** is installed and the `nodejs-20` tool is configured under **Manage Jenkins → Tools**. The Jenkinsfile must reference it:
 
 ```groovy
-tools { nodejs 'nodejs-18' }
+tools { nodejs 'nodejs-20' }
 ```
 
 ### Docker Hub push fails: `unauthorized`
