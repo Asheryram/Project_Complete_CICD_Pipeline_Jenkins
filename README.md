@@ -24,8 +24,8 @@ Pipeline stages:
 |----------|---------|
 | VPC + subnets | Network isolation |
 | Security groups | Restrict access to your IP |
-| EC2 `t3.medium` | Jenkins server (Docker) |
-| EC2 `t3.small` | Application server |
+| EC2 `t3.micro` | Jenkins server (Docker) |
+| EC2 `t3.micro` | Application server |
 | Key pair | Auto-generated SSH keys |
 
 ## Prerequisites
