@@ -7,6 +7,7 @@ exec 2>&1
 
 echo "Starting Jenkins setup at $(date)"
 
+
 # Retrieve Jenkins admin password from Secrets Manager at runtime
 echo "Retrieving Jenkins admin password from Secrets Manager..."
 JENKINS_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value \
