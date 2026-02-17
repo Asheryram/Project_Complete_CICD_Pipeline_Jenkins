@@ -12,14 +12,17 @@ resource "aws_key_pair" "main" {
   }
 }
 
-resource "local_file" "private_key" {
-  content  = tls_private_key.main.private_key_pem
-  filename = "${var.project_name}-${var.environment}-keypair.pem"
-  file_permission = "0600"
+resource "aws_secretsmanager_secret" "private_key" {
+  name                    = "${var.project_name}-${var.environment}-ssh-private-key"
+  description             = "SSH private key for ${var.project_name}-${var.environment} EC2 instances"
+  recovery_window_in_days = 7
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-ssh-private-key"
+  }
 }
 
-resource "local_file" "public_key" {
-  content  = tls_private_key.main.public_key_openssh
-  filename = "${var.project_name}-${var.environment}-keypair.pub"
-  file_permission = "0644"
+resource "aws_secretsmanager_secret_version" "private_key" {
+  secret_id     = aws_secretsmanager_secret.private_key.id
+  secret_string = tls_private_key.main.private_key_pem
 }

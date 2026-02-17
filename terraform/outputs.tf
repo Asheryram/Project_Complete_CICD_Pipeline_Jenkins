@@ -23,12 +23,17 @@ output "app_url" {
   value       = "http://${module.app_server.public_ip}:5000"
 }
 
+output "ssh_private_key_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the SSH private key. Retrieve with: aws secretsmanager get-secret-value --secret-id <arn> --query SecretString --output text"
+  value       = module.keypair.private_key_secret_arn
+}
+
 output "ssh_jenkins" {
-  description = "SSH command for Jenkins server"
-  value       = "ssh -i ${module.keypair.private_key_filename} ec2-user@${module.jenkins.public_ip}"
+  description = "SSH command for Jenkins server (retrieve key from Secrets Manager first)"
+  value       = "ssh -i <private-key-file> ec2-user@${module.jenkins.public_ip}"
 }
 
 output "ssh_app_server" {
-  description = "SSH command for application server"
-  value       = "ssh -i ${module.keypair.private_key_filename} ec2-user@${module.app_server.public_ip}"
+  description = "SSH command for application server (retrieve key from Secrets Manager first)"
+  value       = "ssh -i <private-key-file> ec2-user@${module.app_server.public_ip}"
 }

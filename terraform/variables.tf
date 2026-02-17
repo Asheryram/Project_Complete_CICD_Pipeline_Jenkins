@@ -35,9 +35,13 @@ variable "private_subnets" {
 }
 
 variable "allowed_ips" {
-  description = "List of allowed IP addresses for SSH and Jenkins access"
+  description = "List of allowed CIDR blocks for SSH, Jenkins, and application access. Must be explicitly provided (e.g., [\"203.0.113.10/32\"] for a single IP)."
   type        = list(string)
-  default     = ["0.0.0.0/0"] # Change this to your IP for security
+
+  validation {
+    condition     = !contains(var.allowed_ips, "0.0.0.0/0")
+    error_message = "allowed_ips must not contain 0.0.0.0/0. Specify trusted CIDR blocks (e.g., [\"YOUR_IP/32\"])."
+  }
 }
 
 variable "jenkins_instance_type" {

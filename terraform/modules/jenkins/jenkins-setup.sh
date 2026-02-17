@@ -7,11 +7,20 @@ exec 2>&1
 
 echo "Starting Jenkins setup at $(date)"
 
+# Retrieve Jenkins admin password from Secrets Manager at runtime
+echo "Retrieving Jenkins admin password from Secrets Manager..."
+JENKINS_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value \
+  --secret-id "${secret_arn}" \
+  --region "${aws_region}" \
+  --query SecretString \
+  --output text)
+echo "Jenkins admin password retrieved successfully"
+
 # Update system
 sudo yum update -y
 
-# Install Docker
-sudo yum install -y docker
+# Install Docker and AWS CLI
+sudo yum install -y docker aws-cli
 sudo systemctl start docker
 sudo systemctl enable docker
 sudo usermod -a -G docker ec2-user
@@ -64,6 +73,7 @@ sudo docker run -d \
   -v /var/run/docker.sock:/var/run/docker.sock \
   --user root \
   --group-add "$${DOCKER_GID}" \
+  -e JENKINS_ADMIN_PASSWORD="$${JENKINS_ADMIN_PASSWORD}" \
   jenkins/jenkins:lts
 
 echo "Waiting for Jenkins container to start..."
@@ -118,6 +128,9 @@ sudo docker exec -u root jenkins bash -c "
   npm --version &&
   echo 'Node.js installed successfully inside Jenkins container'
 "
+
+# Clear the password from the environment
+unset JENKINS_ADMIN_PASSWORD
 
 # Final verification
 echo "==================== SETUP SUMMARY ===================="

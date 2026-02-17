@@ -3,9 +3,14 @@ output "key_name" {
   value       = aws_key_pair.main.key_name
 }
 
-output "private_key_filename" {
-  description = "Filename of the private key file"
-  value       = local_file.private_key.filename
+output "private_key_secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the SSH private key"
+  value       = aws_secretsmanager_secret.private_key.arn
+}
+
+output "private_key_secret_name" {
+  description = "Name of the Secrets Manager secret containing the SSH private key"
+  value       = aws_secretsmanager_secret.private_key.name
 }
 
 output "private_key_pem" {

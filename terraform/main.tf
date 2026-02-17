@@ -77,6 +77,7 @@ module "jenkins" {
   subnet_id              = module.vpc.public_subnets[0]
   security_group_ids     = [module.security_groups.jenkins_sg_id]
   jenkins_admin_password = var.jenkins_admin_password
+  aws_region             = var.aws_region
 }
 
 # Application EC2 Module
