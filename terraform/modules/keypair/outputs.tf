@@ -13,12 +13,6 @@ output "private_key_secret_name" {
   value       = aws_secretsmanager_secret.private_key.name
 }
 
-output "private_key_pem" {
-  description = "Private key in PEM format"
-  value       = tls_private_key.main.private_key_pem
-  sensitive   = true
-}
-
 output "public_key_openssh" {
   description = "Public key in OpenSSH format"
   value       = tls_private_key.main.public_key_openssh
