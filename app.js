@@ -1,8 +1,34 @@
 const express = require('express');
+const client = require('prom-client');
 const app = express();
 
 const deploymentTime = new Date().toISOString();
 const version = process.env.APP_VERSION || '1.0.0';
+
+// Prometheus metrics
+const register = new client.Registry();
+client.collectDefaultMetrics({ register });
+
+const httpRequestDuration = new client.Histogram({
+    name: 'http_request_duration_seconds',
+    help: 'Duration of HTTP requests in seconds',
+    labelNames: ['method', 'route', 'status_code'],
+    registers: [register]
+});
+
+const httpRequestTotal = new client.Counter({
+    name: 'http_requests_total',
+    help: 'Total number of HTTP requests',
+    labelNames: ['method', 'route', 'status_code'],
+    registers: [register]
+});
+
+const errorRate = new client.Counter({
+    name: 'http_errors_total',
+    help: 'Total number of HTTP errors',
+    labelNames: ['method', 'route', 'status_code'],
+    registers: [register]
+});
 
 // In-memory storage for timesheets
 const timesheets = [];
@@ -16,6 +42,20 @@ app.use((req, res, next) => {
     requestCount++;
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] ${req.method} ${req.path} - Request #${requestCount}`);
+    
+    const start = Date.now();
+    res.on('finish', () => {
+        const duration = (Date.now() - start) / 1000;
+        const route = req.route ? req.route.path : req.path;
+        
+        httpRequestDuration.labels(req.method, route, res.statusCode).observe(duration);
+        httpRequestTotal.labels(req.method, route, res.statusCode).inc();
+        
+        if (res.statusCode >= 400) {
+            errorRate.labels(req.method, route, res.statusCode).inc();
+        }
+    });
+    
     next();
 });
 
@@ -189,6 +229,11 @@ app.get('/health', (req, res) => {
         uptime: process.uptime(),
         timestamp: new Date().toISOString()
     });
+});
+
+app.get('/metrics', async (req, res) => {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
 });
 
 // Only start server if this file is run directly (not imported for tests)
