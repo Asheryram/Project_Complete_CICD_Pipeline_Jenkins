@@ -7,8 +7,7 @@ exec 2>&1
 
 echo "Starting Jenkins setup at $(date)"
 
-
-# Retrieve Jenkins admin password from Secrets Manager at runtime
+# ── 1. Retrieve Jenkins admin password from Secrets Manager ──────────────────
 echo "Retrieving Jenkins admin password from Secrets Manager..."
 JENKINS_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value \
   --secret-id "${secret_arn}" \
@@ -17,133 +16,105 @@ JENKINS_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value \
   --output text)
 echo "Jenkins admin password retrieved successfully"
 
-# Update system
+# ── 2. System update ─────────────────────────────────────────────────────────
 sudo yum update -y
 
-# Install Docker and AWS CLI
-sudo yum install -y docker aws-cli
+# ── 3. Install Java 21 (required by Jenkins) ─────────────────────────────────
+# Amazon Linux 2 ships Amazon Corretto via amazon-linux-extras
+sudo amazon-linux-extras enable corretto21
+sudo yum install -y java-21-amazon-corretto fontconfig
+java -version
+
+# ── 4. Add Jenkins LTS repository and install Jenkins ────────────────────────
+# Official RHEL/yum instructions from https://www.jenkins.io/doc/book/installing/linux/
+sudo wget -O /etc/yum.repos.d/jenkins.repo \
+    https://pkg.jenkins.io/rpm-stable/jenkins.repo
+sudo rpm --import https://pkg.jenkins.io/rpm-stable/jenkins.io-2023.key
+
+sudo yum upgrade -y
+sudo yum install -y jenkins
+sudo systemctl daemon-reload
+
+# ── 5. Install Docker (for Jenkins pipeline stages) ──────────────────────────
+sudo yum install -y docker
 sudo systemctl start docker
 sudo systemctl enable docker
+
+# Add jenkins and ec2-user to the docker group so pipelines can run containers
+sudo usermod -a -G docker jenkins
 sudo usermod -a -G docker ec2-user
 
-# Install Node.js and Git on host (optional, for debugging)
+# ── 6. Install Node.js 20 and Git ────────────────────────────────────────────
 curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
 sudo yum install -y nodejs git
+node --version
+npm --version
 
-# Get the Docker group ID from the host so the container can use the socket
-DOCKER_GID=$$(getent group docker | cut -d: -f3)
-echo "Docker GID: $${DOCKER_GID}"
+# ── 7. Pre-set the Jenkins admin password via Groovy init script ─────────────
+# Jenkins executes .groovy files in $JENKINS_HOME/init.groovy.d/ at startup.
+# This sets the admin password so the setup wizard is skipped automatically.
+sudo mkdir -p /var/lib/jenkins/init.groovy.d
 
-# Set Docker socket permissions to be accessible
-echo "Setting Docker socket permissions..."
-sudo chmod 666 /var/run/docker.sock
+sudo tee /var/lib/jenkins/init.groovy.d/set-admin-password.groovy > /dev/null <<GROOVY
+import jenkins.model.*
+import hudson.security.*
 
-# Create systemd service to fix Docker socket permissions on boot
-echo "Creating systemd service for Docker socket permissions..."
-sudo tee /etc/systemd/system/docker-socket-permissions.service > /dev/null <<'EOFSERVICE'
-[Unit]
-Description=Fix Docker socket permissions for Jenkins
-After=docker.service
-Requires=docker.service
+def instance = Jenkins.getInstance()
 
-[Service]
-Type=oneshot
-ExecStart=/bin/chmod 666 /var/run/docker.sock
-RemainAfterExit=yes
+def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+hudsonRealm.createAccount("admin", "${r"${JENKINS_ADMIN_PASSWORD}"}")
+instance.setSecurityRealm(hudsonRealm)
 
-[Install]
-WantedBy=multi-user.target
-EOFSERVICE
+def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+strategy.setAllowAnonymousRead(false)
+instance.setAuthorizationStrategy(strategy)
 
-sudo systemctl daemon-reload
-sudo systemctl enable docker-socket-permissions.service
-sudo systemctl start docker-socket-permissions.service
+instance.save()
+GROOVY
 
-echo "Starting Jenkins container..."
+# Substitute the actual password value into the Groovy script
+sudo sed -i "s|\\\${JENKINS_ADMIN_PASSWORD}|$${JENKINS_ADMIN_PASSWORD}|g" \
+  /var/lib/jenkins/init.groovy.d/set-admin-password.groovy
 
-# Run Jenkins in Docker
-# --restart unless-stopped  → survives EC2 stop/start
-# --user root               → needed to access /var/run/docker.sock on Amazon Linux
-# --group-add $DOCKER_GID   → adds Jenkins to the host docker group
-sudo docker run -d \
-  -p 8080:8080 \
-  -p 50000:50000 \
-  --restart unless-stopped \
-  --name jenkins \
-  -v jenkins_home:/var/jenkins_home \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  --user root \
-  --group-add "$${DOCKER_GID}" \
-  -e JENKINS_ADMIN_PASSWORD="$${JENKINS_ADMIN_PASSWORD}" \
-  jenkins/jenkins:lts
+sudo chown -R jenkins:jenkins /var/lib/jenkins/init.groovy.d
 
-echo "Waiting for Jenkins container to start..."
-sleep 45
-
-# Verify Jenkins container is running
-if ! sudo docker ps | grep -q jenkins; then
-  echo "ERROR: Jenkins container failed to start"
-  sudo docker logs jenkins
-  exit 1
-fi
-
-# Verify Docker socket is mounted inside container
-echo "Verifying Docker socket is accessible inside Jenkins container..."
-if ! sudo docker exec jenkins test -S /var/run/docker.sock; then
-  echo "ERROR: Docker socket not found inside Jenkins container"
-  exit 1
-fi
-echo "Docker socket verified: OK"
-
-# Install Docker CLI inside the Jenkins container so pipeline stages can run docker commands
-echo "Installing Docker CLI inside Jenkins container..."
-sudo docker exec -u root jenkins bash -c "
-  apt-get update -qq &&
-  apt-get install -y -qq docker.io &&
-  docker --version &&
-  echo 'Docker CLI installed successfully inside Jenkins container'
-"
-
-# Verify Docker CLI works inside container
-echo "Verifying Docker works inside Jenkins container..."
-if sudo docker exec jenkins docker ps > /dev/null 2>&1; then
-  echo "Docker CLI verification: OK"
-else
-  echo "WARNING: Docker CLI installed but cannot connect to daemon"
-  echo "Attempting to fix permissions..."
-  sudo chmod 666 /var/run/docker.sock
-  if sudo docker exec jenkins docker ps > /dev/null 2>&1; then
-    echo "Docker CLI verification after permission fix: OK"
-  else
-    echo "ERROR: Docker CLI still cannot connect to daemon"
-    exit 1
-  fi
-fi
-
-# Install Node.js inside the Jenkins container (matches host version)
-echo "Installing Node.js inside Jenkins container..."
-sudo docker exec -u root jenkins bash -c "
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &&
-  apt-get install -y nodejs &&
-  node --version &&
-  npm --version &&
-  echo 'Node.js installed successfully inside Jenkins container'
-"
-
-# Clear the password from the environment
+# Clear the password from the environment now that the script is written
 unset JENKINS_ADMIN_PASSWORD
 
-# Final verification
+# ── 8. Enable and start Jenkins ───────────────────────────────────────────────
+sudo systemctl enable jenkins
+sudo systemctl start jenkins
+
+# ── 9. Wait for Jenkins to become ready ──────────────────────────────────────
+echo "Waiting for Jenkins to start..."
+for i in $(seq 1 24); do
+  if sudo systemctl is-active --quiet jenkins; then
+    if curl -s -o /dev/null -w "%%{http_code}" http://localhost:8080/login | grep -qE "^(200|403)"; then
+      echo "Jenkins is up (attempt $${i})"
+      break
+    fi
+  fi
+  echo "Attempt $${i}/24 – waiting 10s..."
+  sleep 10
+done
+
+# ── 10. Final status check ────────────────────────────────────────────────────
+if ! sudo systemctl is-active --quiet jenkins; then
+  echo "ERROR: Jenkins service failed to start"
+  sudo journalctl -u jenkins --no-pager -n 50
+  exit 1
+fi
+
 echo "==================== SETUP SUMMARY ===================="
-echo "Jenkins container: $(sudo docker ps --filter name=jenkins --format '{{.Status}}')"
-echo "Docker socket permissions: $(ls -l /var/run/docker.sock)"
-echo "Docker CLI in Jenkins: $(sudo docker exec jenkins docker --version)"
-echo "Node.js in Jenkins: $(sudo docker exec jenkins node --version)"
+echo "Jenkins service:  $(sudo systemctl is-active jenkins)"
+echo "Java version:     $(java -version 2>&1 | head -1)"
+echo "Node.js version:  $(node --version)"
+echo "Docker version:   $(docker --version)"
 echo "======================================================="
 
 echo "Jenkins setup completed successfully at $(date)"
 PUBLIC_IP=$$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
 echo "Jenkins accessible at: http://$${PUBLIC_IP}:8080"
 echo ""
-echo "To get the initial admin password, run:"
-echo "sudo docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword"
+echo "To retrieve the initial admin password if needed:"
+echo "  sudo cat /var/lib/jenkins/secrets/initialAdminPassword"
