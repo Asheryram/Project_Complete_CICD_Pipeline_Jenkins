@@ -62,7 +62,7 @@ import hudson.security.*
 def instance = Jenkins.getInstance()
 
 def hudsonRealm = new HudsonPrivateSecurityRealm(false)
-hudsonRealm.createAccount("admin", "${r"${JENKINS_ADMIN_PASSWORD}"}")
+hudsonRealm.createAccount("admin", "$${JENKINS_ADMIN_PASSWORD}")
 instance.setSecurityRealm(hudsonRealm)
 
 def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
@@ -73,7 +73,7 @@ instance.save()
 GROOVY
 
 # Substitute the actual password value into the Groovy script
-sudo sed -i "s|\\\${JENKINS_ADMIN_PASSWORD}|$${JENKINS_ADMIN_PASSWORD}|g" \
+sudo sed -i "s|\$\$${JENKINS_ADMIN_PASSWORD}|$$JENKINS_ADMIN_PASSWORD|g" \
   /var/lib/jenkins/init.groovy.d/set-admin-password.groovy
 
 sudo chown -R jenkins:jenkins /var/lib/jenkins/init.groovy.d

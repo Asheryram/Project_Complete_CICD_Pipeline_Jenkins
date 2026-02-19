@@ -45,15 +45,6 @@ resource "aws_security_group" "jenkins" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # SSH to app server for deployments
-  egress {
-    description     = "SSH to app server"
-    from_port       = 22
-    to_port         = 22
-    protocol        = "tcp"
-    security_groups = [aws_security_group.app.id]
-  }
-
   tags = {
     Name = "${var.project_name}-${var.environment}-jenkins-sg"
   }
@@ -81,14 +72,6 @@ resource "aws_security_group" "app" {
     to_port     = 5000
     protocol    = "tcp"
     cidr_blocks = var.allowed_ips
-  }
-
-  ingress {
-    description     = "SSH from Jenkins"
-    from_port       = 22
-    to_port         = 22
-    protocol        = "tcp"
-    security_groups = [aws_security_group.jenkins.id]
   }
 
   # HTTPS - package updates, Docker Hub, AWS APIs, Secrets Manager
@@ -125,4 +108,25 @@ resource "aws_security_group" "app" {
   lifecycle {
     create_before_destroy = true
   }
+}
+
+# Separate rules to avoid circular dependency
+resource "aws_security_group_rule" "jenkins_to_app" {
+  type                     = "egress"
+  from_port                = 22
+  to_port                  = 22
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.jenkins.id
+  source_security_group_id = aws_security_group.app.id
+  description              = "SSH to app server"
+}
+
+resource "aws_security_group_rule" "app_from_jenkins" {
+  type                     = "ingress"
+  from_port                = 22
+  to_port                  = 22
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.app.id
+  source_security_group_id = aws_security_group.jenkins.id
+  description              = "SSH from Jenkins"
 }
