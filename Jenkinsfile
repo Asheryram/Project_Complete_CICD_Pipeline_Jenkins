@@ -50,7 +50,6 @@ pipeline {
             steps {
                 echo 'Building Docker image...'
                 sh '''
-                    docker rm $(docker ps -aq --filter name=${CONTAINER_NAME}) || true
                     docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
                     docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
                 '''
