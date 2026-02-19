@@ -72,19 +72,14 @@ pipeline {
             }
             steps {
                 echo 'Deploying to EC2...'
-                sshagent(['ec2_ssh']) {
+                withCredentials([sshUserPrivateKey(credentialsId: 'ec2_ssh', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
                     sh '''
-                        ssh -o StrictHostKeyChecking=no ec2-user@${EC2_HOST} << EOF
-                            # Stop and remove old container
+                        ssh -i $SSH_KEY -o StrictHostKeyChecking=no $SSH_USER@${EC2_HOST} << EOF
                             docker stop ${CONTAINER_NAME} || true
                             docker rm ${CONTAINER_NAME} || true
-                            
-                            # Pull and run new container
                             echo $REGISTRY_CREDS_PSW | docker login -u $REGISTRY_CREDS_USR --password-stdin
                             docker pull $REGISTRY_CREDS_USR/${DOCKER_IMAGE}:latest
                             docker run -d --name ${CONTAINER_NAME} -p 5000:5000 $REGISTRY_CREDS_USR/${DOCKER_IMAGE}:latest
-                            
-                            # Cleanup old images
                             docker image prune -af
 EOF
                     '''
