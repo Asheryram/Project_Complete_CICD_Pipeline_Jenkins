@@ -50,6 +50,7 @@ pipeline {
             steps {
                 echo 'Building Docker image...'
                 sh '''
+                    docker rm $(docker ps -aq --filter name=${CONTAINER_NAME}) || true
                     docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
                     docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
                 '''
@@ -70,9 +71,9 @@ pipeline {
         }
         
         stage('Deploy') {
-            when {
-                expression { params.EC2_HOST?.trim() }
-            }
+            // when {
+            //     expression { params.EC2_HOST?.trim() }
+            // }
             steps {
                 echo 'Deploying to EC2...'
                 sshagent(['ec2_ssh']) {
