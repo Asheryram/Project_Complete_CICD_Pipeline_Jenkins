@@ -18,6 +18,11 @@ output "app_server_public_ip" {
   value       = module.app_server.public_ip
 }
 
+output "app_server_private_ip" {
+  description = "Private IP address of application server (for Jenkins deployment)"
+  value       = module.app_server.private_ip
+}
+
 output "app_url" {
   description = "Application URL"
   value       = "http://${module.app_server.public_ip}:5000"
