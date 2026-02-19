@@ -25,7 +25,8 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana-dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana-dashboards/dashboard.yml:/etc/grafana/provisioning/dashboards/dashboard.yml
+      - ./grafana-dashboards/nodejs-dashboard.json:/var/lib/grafana/dashboards/nodejs-dashboard.json
       - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
     restart: unless-stopped
     depends_on:

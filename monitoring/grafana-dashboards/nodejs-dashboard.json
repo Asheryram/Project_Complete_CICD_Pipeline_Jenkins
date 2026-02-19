@@ -1,48 +1,117 @@
 {
-  "dashboard": {
-    "id": null,
-    "title": "Node.js Application Monitoring",
-    "tags": ["nodejs", "monitoring"],
-    "timezone": "browser",
-    "panels": [
-      {
-        "id": 1,
-        "title": "HTTP Requests Rate",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "rate(http_requests_total[5m])",
-            "legendFormat": "{{method}} {{status}}"
-          }
-        ],
-        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
-      },
-      {
-        "id": 2,
-        "title": "Response Time",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
-            "legendFormat": "95th percentile"
-          }
-        ],
-        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
-      },
-      {
-        "id": 3,
-        "title": "Error Rate",
-        "type": "graph",
-        "targets": [
-          {
-            "expr": "rate(http_errors_total[5m]) / rate(http_requests_total[5m])",
-            "legendFormat": "Error Rate"
-          }
-        ],
-        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
-      }
-    ],
-    "time": {"from": "now-1h", "to": "now"},
-    "refresh": "5s"
-  }
+  "id": null,
+  "uid": "nodejs-monitoring",
+  "title": "Node.js Application Monitoring",
+  "tags": ["nodejs", "monitoring"],
+  "timezone": "browser",
+  "schemaVersion": 16,
+  "version": 0,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Total Requests",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "sum(http_requests_total)", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+    },
+    {
+      "id": 2,
+      "title": "Request Rate (req/s)",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "sum(rate(http_requests_total[1m]))", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+    },
+    {
+      "id": 3,
+      "title": "Avg Response Time",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m]))", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "s"}},
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}
+    },
+    {
+      "id": 4,
+      "title": "Error Count",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "sum(http_errors_total)", "refId": "A"}],
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}
+    },
+    {
+      "id": 5,
+      "title": "HTTP Requests by Status Code",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "rate(http_requests_total[5m])", "legendFormat": "{{method}} {{route}} ({{status_code}})", "refId": "A"}],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}
+    },
+    {
+      "id": 6,
+      "title": "Response Time Percentiles",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m]))", "legendFormat": "50th percentile", "refId": "A"},
+        {"expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))", "legendFormat": "95th percentile", "refId": "B"},
+        {"expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))", "legendFormat": "99th percentile", "refId": "C"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4}
+    },
+    {
+      "id": 7,
+      "title": "CPU Usage",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "rate(process_cpu_seconds_total[1m]) * 100", "legendFormat": "CPU Usage %", "refId": "A"}],
+      "gridPos": {"h": 7, "w": 8, "x": 0, "y": 12}
+    },
+    {
+      "id": 8,
+      "title": "Memory Usage (MB)",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "process_resident_memory_bytes / 1024 / 1024", "legendFormat": "Memory Usage (MB)", "refId": "A"}],
+      "gridPos": {"h": 7, "w": 8, "x": 8, "y": 12}
+    },
+    {
+      "id": 9,
+      "title": "Active Handles",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "nodejs_active_handles", "legendFormat": "Active Handles", "refId": "A"}],
+      "gridPos": {"h": 7, "w": 8, "x": 16, "y": 12}
+    },
+    {
+      "id": 10,
+      "title": "Requests by Route",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "rate(http_requests_total[5m])", "legendFormat": "{{method}} {{route}}", "refId": "A"}],
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 19}
+    },
+    {
+      "id": 11,
+      "title": "Error Rate %",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [{"expr": "(rate(http_errors_total[5m]) / rate(http_requests_total[5m])) * 100", "legendFormat": "Error %", "refId": "A"}],
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 19}
+    },
+    {
+      "id": 12,
+      "title": "CPU Usage by API Route",
+      "type": "graph",
+      "datasource": "Prometheus",
+      "targets": [
+        {"expr": "rate(http_request_cpu_seconds_total[5m]) * 100", "legendFormat": "{{method}} {{route}}", "refId": "A"}
+      ],
+      "yAxes": [{"label": "CPU %", "min": 0}],
+      "gridPos": {"h": 7, "w": 24, "x": 0, "y": 26}
+    }
+  ],
+  "time": {"from": "now-1h", "to": "now"},
+  "refresh": "5s"
 }
