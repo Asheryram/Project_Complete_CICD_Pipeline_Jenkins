@@ -30,6 +30,13 @@ const errorRate = new client.Counter({
     registers: [register]
 });
 
+const httpRequestCpuTime = new client.Counter({
+    name: 'http_request_cpu_seconds_total',
+    help: 'CPU time consumed by HTTP requests',
+    labelNames: ['method', 'route', 'status_code'],
+    registers: [register]
+});
+
 // In-memory storage for timesheets
 const timesheets = [];
 let requestCount = 0;
@@ -44,12 +51,17 @@ app.use((req, res, next) => {
     console.log(`[${timestamp}] ${req.method} ${req.path} - Request #${requestCount}`);
     
     const start = Date.now();
+    const cpuStart = process.cpuUsage();
+    
     res.on('finish', () => {
         const duration = (Date.now() - start) / 1000;
+        const cpuEnd = process.cpuUsage(cpuStart);
+        const cpuTime = (cpuEnd.user + cpuEnd.system) / 1000000; // Convert to seconds
         const route = req.route ? req.route.path : req.path;
         
         httpRequestDuration.labels(req.method, route, res.statusCode).observe(duration);
         httpRequestTotal.labels(req.method, route, res.statusCode).inc();
+        httpRequestCpuTime.labels(req.method, route, res.statusCode).inc(cpuTime);
         
         if (res.statusCode >= 400) {
             errorRate.labels(req.method, route, res.statusCode).inc();
