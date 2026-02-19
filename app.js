@@ -112,13 +112,13 @@ app.get('/', (req, res) => {
                     document.getElementById('totalEntries').textContent = data.total;
                     document.getElementById('totalHours').textContent = data.totalHours;
                     
-                    const html = data.timesheets.map(t => `
-                        <div class="timesheet-item">
-                            <strong>${t.name}</strong> - ${t.project}<br>
-                            Date: ${t.date} | Hours: ${t.hours}<br>
-                            <small>Submitted: ${new Date(t.timestamp).toLocaleString()}</small>
-                        </div>
-                    `).join('');
+                    const html = data.timesheets.map(t => 
+                        '<div class="timesheet-item">' +
+                            '<strong>' + t.name + '</strong> - ' + t.project + '<br>' +
+                            'Date: ' + t.date + ' | Hours: ' + t.hours + '<br>' +
+                            '<small>Submitted: ' + new Date(t.timestamp).toLocaleString() + '</small>' +
+                        '</div>'
+                    ).join('');
                     document.getElementById('timesheets').innerHTML = html || '<p>No timesheets yet</p>';
                 });
         }
