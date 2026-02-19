@@ -104,6 +104,14 @@ curl http://$APP_IP:5000/health    # {"status":"healthy"}
 curl http://$APP_IP:5000/api/info  # version + deployment time
 ```
 
+**Successful Deployment:**
+
+![Successful Pipeline](screenshots/successful_pipeline.png)
+*Jenkins pipeline completed successfully with all stages passing*
+
+![Application Running](screenshots/successfull_app_deployment_site.png)
+*Interactive timesheet application deployed and accessible*
+
 ## Project Structure
 
 ```
