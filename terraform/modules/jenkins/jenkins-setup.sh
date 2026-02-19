@@ -1,120 +1,74 @@
 #!/bin/bash
 set -e
-
-# Log all output
 exec > >(tee /var/log/jenkins-setup.log)
 exec 2>&1
 
-echo "Starting Jenkins setup at $(date)"
+echo "Starting Jenkins Docker setup at $(date)"
 
-# ── 1. Retrieve Jenkins admin password from Secrets Manager ──────────────────
-echo "Retrieving Jenkins admin password from Secrets Manager..."
-JENKINS_ADMIN_PASSWORD=$(aws secretsmanager get-secret-value \
-  --secret-id "${secret_arn}" \
-  --region "${aws_region}" \
-  --query SecretString \
-  --output text)
-echo "Jenkins admin password retrieved successfully"
-
-# ── 2. System update ─────────────────────────────────────────────────────────
+# Install Docker
 sudo yum update -y
-
-# ── 3. Install Java 21 (required by Jenkins) ─────────────────────────────────
-# Amazon Linux 2 ships Amazon Corretto via amazon-linux-extras
-sudo amazon-linux-extras enable corretto21
-sudo yum install -y java-21-amazon-corretto fontconfig
-java -version
-
-# ── 4. Add Jenkins LTS repository and install Jenkins ────────────────────────
-# Official RHEL/yum instructions from https://www.jenkins.io/doc/book/installing/linux/
-sudo wget -O /etc/yum.repos.d/jenkins.repo \
-    https://pkg.jenkins.io/rpm-stable/jenkins.repo
-sudo rpm --import https://pkg.jenkins.io/rpm-stable/jenkins.io-2023.key
-
-sudo yum upgrade -y
-sudo yum install -y jenkins
-sudo systemctl daemon-reload
-
-# ── 5. Install Docker (for Jenkins pipeline stages) ──────────────────────────
-sudo yum install -y docker
+sudo yum install -y docker git
 sudo systemctl start docker
 sudo systemctl enable docker
-
-# Add jenkins and ec2-user to the docker group so pipelines can run containers
-sudo usermod -a -G docker jenkins
 sudo usermod -a -G docker ec2-user
 
-# ── 6. Install Node.js 20 and Git ────────────────────────────────────────────
-curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-sudo yum install -y nodejs git
-node --version
-npm --version
+# Create Docker network
+sudo docker network create jenkins || true
 
-# ── 7. Pre-set the Jenkins admin password via Groovy init script ─────────────
-# Jenkins executes .groovy files in $JENKINS_HOME/init.groovy.d/ at startup.
-# This sets the admin password so the setup wizard is skipped automatically.
-sudo mkdir -p /var/lib/jenkins/init.groovy.d
+# Run Docker-in-Docker container
+sudo docker run --name jenkins-docker --rm --detach \
+  --privileged --network jenkins --network-alias docker \
+  --env DOCKER_TLS_CERTDIR=/certs \
+  --volume jenkins-docker-certs:/certs/client \
+  --volume jenkins-data:/var/jenkins_home \
+  --publish 2376:2376 \
+  docker:dind --storage-driver overlay2
 
-sudo tee /var/lib/jenkins/init.groovy.d/set-admin-password.groovy > /dev/null <<GROOVY
-import jenkins.model.*
-import hudson.security.*
+# Create Dockerfile
+cat > /tmp/Dockerfile <<'EOF'
+FROM jenkins/jenkins:2.541.2-jdk21
+USER root
+RUN apt-get update && apt-get install -y lsb-release ca-certificates curl && \
+    mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc && \
+    chmod a+r /etc/apt/keyrings/docker.asc && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list && \
+    apt-get update && apt-get install -y docker-ce-cli && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+USER jenkins
+RUN jenkins-plugin-cli --plugins "blueocean docker-workflow json-path-api"
+EOF
 
-def instance = Jenkins.getInstance()
+# Build custom Jenkins image
+sudo docker build -t myjenkins-blueocean:2.541.2-1 /tmp/
 
-def hudsonRealm = new HudsonPrivateSecurityRealm(false)
-hudsonRealm.createAccount("admin", "$${JENKINS_ADMIN_PASSWORD}")
-instance.setSecurityRealm(hudsonRealm)
+# Run Jenkins container
+sudo docker run --name jenkins-blueocean --restart=on-failure --detach \
+  --network jenkins --env DOCKER_HOST=tcp://docker:2376 \
+  --env DOCKER_CERT_PATH=/certs/client --env DOCKER_TLS_VERIFY=1 \
+  --publish 8080:8080 --publish 50000:50000 \
+  --volume jenkins-data:/var/jenkins_home \
+  --volume jenkins-docker-certs:/certs/client:ro \
+  myjenkins-blueocean:2.541.2-1
 
-def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
-strategy.setAllowAnonymousRead(false)
-instance.setAuthorizationStrategy(strategy)
-
-instance.save()
-GROOVY
-
-# Substitute the actual password value into the Groovy script
-sudo sed -i "s|\$\$${JENKINS_ADMIN_PASSWORD}|$$JENKINS_ADMIN_PASSWORD|g" \
-  /var/lib/jenkins/init.groovy.d/set-admin-password.groovy
-
-sudo chown -R jenkins:jenkins /var/lib/jenkins/init.groovy.d
-
-# Clear the password from the environment now that the script is written
-unset JENKINS_ADMIN_PASSWORD
-
-# ── 8. Enable and start Jenkins ───────────────────────────────────────────────
-sudo systemctl enable jenkins
-sudo systemctl start jenkins
-
-# ── 9. Wait for Jenkins to become ready ──────────────────────────────────────
+# Wait for Jenkins to start
 echo "Waiting for Jenkins to start..."
-for i in $(seq 1 24); do
-  if sudo systemctl is-active --quiet jenkins; then
-    if curl -s -o /dev/null -w "%%{http_code}" http://localhost:8080/login | grep -qE "^(200|403)"; then
-      echo "Jenkins is up (attempt $${i})"
-      break
-    fi
+for i in $(seq 1 30); do
+  if curl -s http://localhost:8080 > /dev/null; then
+    echo "Jenkins is up!"
+    break
   fi
-  echo "Attempt $${i}/24 – waiting 10s..."
+  echo "Attempt $i/30 – waiting 10s..."
   sleep 10
 done
 
-# ── 10. Final status check ────────────────────────────────────────────────────
-if ! sudo systemctl is-active --quiet jenkins; then
-  echo "ERROR: Jenkins service failed to start"
-  sudo journalctl -u jenkins --no-pager -n 50
-  exit 1
-fi
-
 echo "==================== SETUP SUMMARY ===================="
-echo "Jenkins service:  $(sudo systemctl is-active jenkins)"
-echo "Java version:     $(java -version 2>&1 | head -1)"
-echo "Node.js version:  $(node --version)"
-echo "Docker version:   $(docker --version)"
+echo "Jenkins running in Docker"
+echo "Docker version: $(docker --version)"
 echo "======================================================="
-
-echo "Jenkins setup completed successfully at $(date)"
-PUBLIC_IP=$$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
-echo "Jenkins accessible at: http://$${PUBLIC_IP}:8080"
+echo "Jenkins setup completed at $(date)"
+PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+echo "Jenkins accessible at: http://$PUBLIC_IP:8080"
 echo ""
-echo "To retrieve the initial admin password if needed:"
-echo "  sudo cat /var/lib/jenkins/secrets/initialAdminPassword"
+echo "Get initial admin password:"
+echo "  sudo docker exec jenkins-blueocean cat /var/jenkins_home/secrets/initialAdminPassword"

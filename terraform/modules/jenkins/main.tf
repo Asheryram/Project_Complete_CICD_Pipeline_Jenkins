@@ -69,10 +69,7 @@ resource "aws_instance" "jenkins" {
   vpc_security_group_ids = var.security_group_ids
   iam_instance_profile   = aws_iam_instance_profile.jenkins.name
 
-  user_data = templatefile("${path.module}/jenkins-setup.sh", {
-    secret_arn = aws_secretsmanager_secret.jenkins_admin_password.arn
-    aws_region = var.aws_region
-  })
+  user_data = templatefile("${path.module}/jenkins-setup.sh", {})
 
   root_block_device {
     volume_type = "gp3"
