@@ -15,9 +15,6 @@ pipeline {
         REGISTRY = "docker.io"
         REGISTRY_CREDS = credentials('registry_creds')
         CONTAINER_NAME = "node-app"
-        DOCKER_HOST = "tcp://docker:2376"
-        DOCKER_CERT_PATH = "/certs/client"
-        DOCKER_TLS_VERIFY = "1"
     }
     
     stages {
@@ -70,9 +67,9 @@ pipeline {
         }
         
         stage('Deploy') {
-            // when {
-            //     expression { params.EC2_HOST?.trim() }
-            // }
+            when {
+                expression { params.EC2_HOST?.trim() }
+            }
             steps {
                 echo 'Deploying to EC2...'
                 sshagent(['ec2_ssh']) {
