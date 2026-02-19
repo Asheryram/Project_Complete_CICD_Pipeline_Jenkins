@@ -5,14 +5,21 @@ const app = express();
 const deploymentTime = new Date().toISOString();
 const version = process.env.APP_VERSION || '1.0.0';
 
-// Prometheus metrics
+// ─── Prometheus Setup ────────────────────────────────────────────────────────
 const register = new client.Registry();
-client.collectDefaultMetrics({ register });
 
+// Adds: process_cpu_seconds_total, process_resident_memory_bytes,
+//       nodejs_eventloop_lag_seconds, nodejs_active_handles,
+//       nodejs_active_requests, nodejs_heap_size_*, nodejs_gc_duration_seconds
+client.collectDefaultMetrics({ register, labels: { app: 'timesheet-app', version } });
+
+// ─── Existing Metrics ────────────────────────────────────────────────────────
 const httpRequestDuration = new client.Histogram({
     name: 'http_request_duration_seconds',
     help: 'Duration of HTTP requests in seconds',
     labelNames: ['method', 'route', 'status_code'],
+    // More granular buckets for a fast app (ms range)
+    buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
     registers: [register]
 });
 
@@ -23,7 +30,7 @@ const httpRequestTotal = new client.Counter({
     registers: [register]
 });
 
-const errorRate = new client.Counter({
+const httpErrorsTotal = new client.Counter({
     name: 'http_errors_total',
     help: 'Total number of HTTP errors',
     labelNames: ['method', 'route', 'status_code'],
@@ -37,40 +44,123 @@ const httpRequestCpuTime = new client.Counter({
     registers: [register]
 });
 
-// In-memory storage for timesheets
+// ─── NEW: Timesheet Business Metrics ────────────────────────────────────────
+
+// Tracks total timesheets submitted (persists across requests, survives counter resets)
+const timesheetSubmissionsTotal = new client.Counter({
+    name: 'timesheet_submissions_total',
+    help: 'Total number of timesheet entries submitted',
+    labelNames: ['project'],   // breakdown by project!
+    registers: [register]
+});
+
+// Tracks total hours logged across all submissions
+const timesheetHoursTotal = new client.Counter({
+    name: 'timesheet_hours_total',
+    help: 'Total hours logged across all timesheet submissions',
+    labelNames: ['project'],
+    registers: [register]
+});
+
+// Gauge: current number of timesheets in memory (snapshot at any moment)
+const timesheetCount = new client.Gauge({
+    name: 'timesheet_entries_current',
+    help: 'Current number of timesheet entries stored in memory',
+    registers: [register]
+});
+
+// Histogram: distribution of hours submitted per entry
+const timesheetHoursPerEntry = new client.Histogram({
+    name: 'timesheet_hours_per_entry',
+    help: 'Distribution of hours logged per timesheet entry',
+    labelNames: ['project'],
+    buckets: [1, 2, 4, 6, 8, 10, 12],   // typical working hours range
+    registers: [register]
+});
+
+// ─── NEW: Request Size Metrics ───────────────────────────────────────────────
+
+const httpRequestSizeBytes = new client.Histogram({
+    name: 'http_request_size_bytes',
+    help: 'Size of HTTP request bodies in bytes',
+    labelNames: ['method', 'route'],
+    buckets: [100, 500, 1000, 5000, 10000],
+    registers: [register]
+});
+
+const httpResponseSizeBytes = new client.Histogram({
+    name: 'http_response_size_bytes',
+    help: 'Size of HTTP response bodies in bytes',
+    labelNames: ['method', 'route', 'status_code'],
+    buckets: [100, 500, 1000, 5000, 10000, 50000],
+    registers: [register]
+});
+
+// ─── NEW: Concurrent Requests Gauge ─────────────────────────────────────────
+
+const httpRequestsInFlight = new client.Gauge({
+    name: 'http_requests_in_flight',
+    help: 'Number of HTTP requests currently being processed',
+    labelNames: ['method', 'route'],
+    registers: [register]
+});
+
+// ─── In-memory storage ───────────────────────────────────────────────────────
 const timesheets = [];
 let requestCount = 0;
 
 app.use(express.json());
 app.use(express.static('public'));
 
-// Logging middleware
+// ─── Middleware ───────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
     requestCount++;
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] ${req.method} ${req.path} - Request #${requestCount}`);
-    
+
     const start = Date.now();
     const cpuStart = process.cpuUsage();
-    
+
+    // Track request body size
+    const requestSize = parseInt(req.headers['content-length'] || '0', 10);
+
+    // Increment in-flight gauge
+    const routeKey = req.path;
+    httpRequestsInFlight.labels(req.method, routeKey).inc();
+
     res.on('finish', () => {
         const duration = (Date.now() - start) / 1000;
         const cpuEnd = process.cpuUsage(cpuStart);
-        const cpuTime = (cpuEnd.user + cpuEnd.system) / 1000000; // Convert to seconds
+        const cpuTime = (cpuEnd.user + cpuEnd.system) / 1000000;
         const route = req.route ? req.route.path : req.path;
-        
+
+        // Decrement in-flight
+        httpRequestsInFlight.labels(req.method, routeKey).dec();
+
+        // Core metrics
         httpRequestDuration.labels(req.method, route, res.statusCode).observe(duration);
         httpRequestTotal.labels(req.method, route, res.statusCode).inc();
         httpRequestCpuTime.labels(req.method, route, res.statusCode).inc(cpuTime);
-        
+
+        // Error tracking
         if (res.statusCode >= 400) {
-            errorRate.labels(req.method, route, res.statusCode).inc();
+            httpErrorsTotal.labels(req.method, route, res.statusCode).inc();
+        }
+
+        // Request/response size tracking
+        if (requestSize > 0) {
+            httpRequestSizeBytes.labels(req.method, route).observe(requestSize);
+        }
+        const responseSize = parseInt(res.getHeader('content-length') || '0', 10);
+        if (responseSize > 0) {
+            httpResponseSizeBytes.labels(req.method, route, res.statusCode).observe(responseSize);
         }
     });
-    
+
     next();
 });
 
+// ─── Routes ───────────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
     console.log('[INFO] Home page accessed');
     res.send(`
@@ -163,7 +253,6 @@ app.get('/', (req, res) => {
                 .then(data => {
                     document.getElementById('totalEntries').textContent = data.total;
                     document.getElementById('totalHours').textContent = data.totalHours;
-                    
                     const html = data.timesheets.map(t => 
                         '<div class="timesheet-item">' +
                             '<strong>' + t.name + '</strong> - ' + t.project + '<br>' +
@@ -183,13 +272,11 @@ app.get('/', (req, res) => {
                 hours: parseFloat(document.getElementById('hours').value),
                 project: document.getElementById('project').value
             };
-            
             await fetch('/api/timesheets', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)
             });
-            
             e.target.reset();
             loadTimesheets();
         };
@@ -213,13 +300,27 @@ app.get('/api/timesheets', (req, res) => {
 });
 
 app.post('/api/timesheets', (req, res) => {
-    const entry = {
-        ...req.body,
-        timestamp: new Date().toISOString(),
-        id: Date.now()
-    };
+    const { name, date, hours, project } = req.body;
+
+    // Validate input
+    if (!name || !date || hours == null || !project) {
+        return res.status(400).json({ success: false, error: 'Missing required fields' });
+    }
+    if (hours <= 0 || hours > 24) {
+        return res.status(422).json({ success: false, error: 'Hours must be between 0 and 24' });
+    }
+
+    const entry = { ...req.body, timestamp: new Date().toISOString(), id: Date.now() };
     timesheets.push(entry);
-    console.log(`[SUCCESS] Timesheet submitted: ${entry.name} - ${entry.hours}h on ${entry.project}`);
+
+    // ── Record business metrics ──────────────────────────────────────────────
+    timesheetSubmissionsTotal.labels(project).inc();
+    timesheetHoursTotal.labels(project).inc(hours);
+    timesheetHoursPerEntry.labels(project).observe(hours);
+    timesheetCount.set(timesheets.length);
+    // ─────────────────────────────────────────────────────────────────────────
+
+    console.log(`[SUCCESS] Timesheet submitted: ${name} - ${hours}h on ${project}`);
     res.json({ success: true, entry });
 });
 
@@ -228,7 +329,7 @@ app.get('/api/info', (req, res) => {
     res.json({
         version,
         deploymentTime,
-        status: "running",
+        status: 'running',
         totalTimesheets: timesheets.length,
         totalRequests: requestCount
     });
@@ -237,7 +338,7 @@ app.get('/api/info', (req, res) => {
 app.get('/health', (req, res) => {
     console.log('[HEALTH] Health check performed');
     res.status(200).json({
-        status: "healthy",
+        status: 'healthy',
         uptime: process.uptime(),
         timestamp: new Date().toISOString()
     });
@@ -248,7 +349,6 @@ app.get('/metrics', async (req, res) => {
     res.end(await register.metrics());
 });
 
-// Only start server if this file is run directly (not imported for tests)
 if (require.main === module) {
     const port = process.env.PORT || 5000;
     app.listen(port, '0.0.0.0', () => {
