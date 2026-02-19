@@ -15,6 +15,9 @@ pipeline {
         REGISTRY = "docker.io"
         REGISTRY_CREDS = credentials('registry_creds')
         CONTAINER_NAME = "node-app"
+        DOCKER_HOST = "tcp://docker:2376"
+        DOCKER_CERT_PATH = "/certs/client"
+        DOCKER_TLS_VERIFY = "1"
     }
     
     stages {
