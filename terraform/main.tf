@@ -97,4 +97,28 @@ module "app_server" {
   subnet_id          = module.vpc.public_subnets[1]
   security_group_ids = [module.security_groups.app_sg_id]
   user_data          = file("${path.module}/scripts/app-server-setup.sh")
+  name               = "app-server"
+}
+
+# Monitoring EC2 Module (Prometheus + Grafana + Alertmanager + Node Exporter)
+module "monitoring_server" {
+  source = "./modules/ec2"
+
+  project_name       = var.project_name
+  environment        = var.environment
+  ami_id             = data.aws_ami.amazon_linux.id
+  instance_type      = var.monitoring_instance_type
+  key_name           = module.keypair.key_name
+  subnet_id          = module.vpc.public_subnets[0]
+  security_group_ids = [module.security_groups.monitoring_sg_id]
+  name               = "monitoring"
+
+  # templatefile injects the app server's private IP and credentials so the
+  # setup script can write prometheus.yml and the docker-compose .env file
+  # without any hardcoded values.
+  user_data = templatefile("${path.module}/scripts/monitoring-setup.sh", {
+    app_server_ip          = module.app_server.private_ip
+    grafana_admin_password = var.grafana_admin_password
+    git_repo_url           = var.git_repo_url
+  })
 }

@@ -38,3 +38,9 @@ variable "user_data" {
   type        = string
   default     = ""
 }
+
+variable "name" {
+  description = "Name suffix used in the AWS Name tag (e.g. app-server, monitoring)"
+  type        = string
+  default     = "app-server"
+}

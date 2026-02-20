@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "timesheet-basic",
-  "title": "⏰ Timesheet App — Basic Monitoring",
+  "title": "Timesheet App — Basic Monitoring",
   "tags": ["nodejs", "timesheet"],
   "timezone": "browser",
   "schemaVersion": 36,

@@ -32,3 +32,7 @@ jenkins_admin_password = "YourSecurePassword123!"
 # vpc_cidr = "172.16.0.0/16"  # Alternative VPC CIDR
 # jenkins_instance_type = "t3.large"  # For heavy Jenkins usage
 # app_instance_type = "t3.medium"     # For production workloads
+
+grafana_admin_password   = "your-secure-password"
+git_repo_url             = "https://github.com/<your-org>/<repo>.git"
+monitoring_instance_type = "t3.small"   # optional, this is the default

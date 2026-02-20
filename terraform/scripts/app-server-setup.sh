@@ -22,3 +22,17 @@ chmod +x /usr/local/bin/docker-compose
 # Create application directory
 mkdir -p /opt/app
 chown ec2-user:ec2-user /opt/app
+
+
+# Run Node Exporter for Prometheus scraping
+docker run -d \
+  --name node-exporter \
+  --restart=unless-stopped \
+  --network="host" \
+  --pid="host" \
+  -v "/:/host:ro,rslave" \
+  prom/node-exporter:latest \
+  --path.rootfs=/host
+
+echo "Node Exporter running on port 9100"
+echo "App server setup completed at $(date)"

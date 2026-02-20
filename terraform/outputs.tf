@@ -42,3 +42,28 @@ output "ssh_app_server" {
   description = "SSH command for application server (retrieve key from Secrets Manager first)"
   value       = "ssh -i <private-key-file> ec2-user@${module.app_server.public_ip}"
 }
+
+output "monitoring_server_public_ip" {
+  description = "Public IP address of the monitoring server"
+  value       = module.monitoring_server.public_ip
+}
+
+output "prometheus_url" {
+  description = "Prometheus URL"
+  value       = "http://${module.monitoring_server.public_ip}:9090"
+}
+
+output "grafana_url" {
+  description = "Grafana URL (login: admin / <grafana_admin_password>)"
+  value       = "http://${module.monitoring_server.public_ip}:3000"
+}
+
+output "alertmanager_url" {
+  description = "Alertmanager URL"
+  value       = "http://${module.monitoring_server.public_ip}:9093"
+}
+
+output "ssh_monitoring_server" {
+  description = "SSH command for monitoring server (retrieve key from Secrets Manager first)"
+  value       = "ssh -i <private-key-file> ec2-user@${module.monitoring_server.public_ip}"
+}

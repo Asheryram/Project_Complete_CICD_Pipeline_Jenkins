@@ -61,3 +61,20 @@ variable "jenkins_admin_password" {
   type        = string
   sensitive   = true
 }
+
+variable "monitoring_instance_type" {
+  description = "Instance type for the monitoring server (Prometheus + Grafana)"
+  type        = string
+  default     = "t3.small"
+}
+
+variable "grafana_admin_password" {
+  description = "Grafana admin password. Avoid # and $ characters."
+  type        = string
+  sensitive   = true
+}
+
+variable "git_repo_url" {
+  description = "HTTPS URL of this repository; used by the monitoring EC2 to clone configs and dashboard JSON."
+  type        = string
+}

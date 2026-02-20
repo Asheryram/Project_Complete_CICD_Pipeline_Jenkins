@@ -13,7 +13,7 @@ resource "aws_instance" "app_server" {
   }
 
   tags = {
-    Name        = "${var.project_name}-${var.environment}-app-server"
+    Name        = "${var.project_name}-${var.environment}-${var.name}"
     Project     = var.project_name
     Environment = var.environment
   }

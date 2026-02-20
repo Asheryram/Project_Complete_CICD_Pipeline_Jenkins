@@ -1,8 +1,8 @@
 # Store Jenkins admin password in Secrets Manager
 resource "aws_secretsmanager_secret" "jenkins_admin_password" {
-  name                    = "${var.project_name}-${var.environment}-jenkins-admin-password"
+  name                    = "${var.project_name}-${var.environment}-jenkins-admin-password1"
   description             = "Jenkins admin password for ${var.project_name}-${var.environment}"
-  recovery_window_in_days = 7
+  recovery_window_in_days = 0
 
   tags = {
     Name = "${var.project_name}-${var.environment}-jenkins-admin-password"
