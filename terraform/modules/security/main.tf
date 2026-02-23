@@ -180,6 +180,14 @@ resource "aws_security_group" "monitoring" {
   }
 
   egress {
+    description = "SMTP outbound"
+    from_port   = 587
+    to_port     = 587
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
     description = "DNS outbound"
     from_port   = 53
     to_port     = 53
