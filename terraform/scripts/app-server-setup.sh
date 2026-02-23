@@ -32,7 +32,8 @@ docker run -d \
   --pid="host" \
   -v "/:/host:ro,rslave" \
   prom/node-exporter:latest \
-  --path.rootfs=/host
+  --path.rootfs=/host \
+  --web.listen-address=0.0.0.0:9100
 
 echo "Node Exporter running on port 9100"
 echo "App server setup completed at $(date)"
