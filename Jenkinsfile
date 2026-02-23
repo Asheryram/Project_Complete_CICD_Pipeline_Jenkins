@@ -6,7 +6,7 @@ pipeline {
     }
 
     parameters {
-        string(name: 'EC2_HOST', description: 'Public IP of the app server EC2 instance (from Terraform output: app_server_public_ip)')
+        string(name: 'EC2_HOST', description: 'Private IP of the app server EC2 instance')
     }
 
     environment {
