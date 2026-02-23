@@ -112,6 +112,34 @@ curl http://$APP_IP:5000/api/info  # version + deployment time
 ![Application Running](screenshots/successfull_app_deployment_site.png)
 *Interactive timesheet application deployed and accessible*
 
+## Monitoring & Observability
+
+The infrastructure includes a comprehensive monitoring stack with Prometheus, Grafana, and Alertmanager:
+
+**Prometheus Metrics Collection:**
+
+![Prometheus Dashboard](screenshots/monitoring/PrometheusDashboard.png)
+*Prometheus collecting metrics from application and infrastructure*
+
+**Grafana Visualization:**
+
+![Grafana Dashboard](screenshots/monitoring/GrafanaDashboard.png)
+*Real-time application and system metrics visualization*
+
+![Grafana Prometheus Metrics](screenshots/monitoring/Grafana_prometheus_metrics.png)
+*Detailed Prometheus metrics integration in Grafana*
+
+**Alert Management:**
+
+![AlertManager Dashboard](screenshots/monitoring/AlertManagerDashboard.png)
+*Alertmanager managing and routing alerts*
+
+![Alert Trigger Result](screenshots/monitoring/ResultAlertTrigger.png)
+*Alert successfully triggered and processed*
+
+![Error Alert Email](screenshots/monitoring/ErrorAlertTriggerMail.png)
+*Email notification sent when alerts are triggered*
+
 ## Project Structure
 
 ```
