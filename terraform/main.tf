@@ -120,5 +120,9 @@ module "monitoring_server" {
     app_server_ip          = module.app_server.private_ip
     grafana_admin_password = var.grafana_admin_password
     git_repo_url           = var.git_repo_url
+    alert_email_to         = var.alert_email_to
+    alert_email_from       = var.alert_email_from
+    alert_email_username   = var.alert_email_username
+    alert_email_password   = var.alert_email_password
   })
 }
