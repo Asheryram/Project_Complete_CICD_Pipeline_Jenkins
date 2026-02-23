@@ -71,7 +71,7 @@ resource "aws_security_group" "app" {
     from_port   = 5000
     to_port     = 5000
     protocol    = "tcp"
-    cidr_blocks = var.allowed_ips
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
