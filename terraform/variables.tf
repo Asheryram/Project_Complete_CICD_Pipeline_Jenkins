@@ -78,3 +78,24 @@ variable "git_repo_url" {
   description = "HTTPS URL of this repository; used by the monitoring EC2 to clone configs and dashboard JSON."
   type        = string
 }
+
+variable "alert_email_to" {
+  description = "Email address to send alerts to"
+  type        = string
+}
+
+variable "alert_email_from" {
+  description = "Email address to send alerts from"
+  type        = string
+}
+
+variable "alert_email_username" {
+  description = "Email username for SMTP authentication"
+  type        = string
+}
+
+variable "alert_email_password" {
+  description = "Email password for alertmanager notifications"
+  type        = string
+  sensitive   = true
+}

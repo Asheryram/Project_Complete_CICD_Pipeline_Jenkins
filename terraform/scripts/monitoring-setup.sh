@@ -5,6 +5,10 @@
 #   ${app_server_ip}        – private IP of the app EC2 instance
 #   ${grafana_admin_password} – Grafana admin password (from TF variable)
 #   ${git_repo_url}         – HTTPS URL of this git repository
+#   ${alert_email_password} – Email password for alertmanager
+#   ${alert_email_to}       – Email address to send alerts to
+#   ${alert_email_from}     – Email address to send alerts from
+#   ${alert_email_username} – Email username for SMTP authentication
 #
 # All shell variables use single $ in this script
 
@@ -39,12 +43,19 @@ MONITORING_DIR=/opt/monitoring-repo/monitoring
 cat > "$MONITORING_DIR/.env" <<'ENVEOF'
 APP_SERVER_IP=${app_server_ip}
 GRAFANA_ADMIN_PASSWORD=${grafana_admin_password}
+ALERT_EMAIL_TO=${alert_email_to}
+ALERT_EMAIL_FROM=${alert_email_from}
+ALERT_EMAIL_USERNAME=${alert_email_username}
+ALERT_EMAIL_PASSWORD=${alert_email_password}
 ENVEOF
 
 chown ec2-user:ec2-user "$MONITORING_DIR/.env"
 chmod 600 "$MONITORING_DIR/.env"
 
-# ── 6. Start the monitoring stack ─────────────────────────────────────────
+# ── 6. Process alertmanager template ──────────────────────────────────────
+envsubst < "$MONITORING_DIR/alertmanager.yml.template" > "$MONITORING_DIR/alertmanager.yml"
+
+# ── 7. Start the monitoring stack ─────────────────────────────────────────
 # Run as ec2-user so volume-mounted files are owned correctly
 su -c "cd $MONITORING_DIR && docker-compose up -d" ec2-user
 
