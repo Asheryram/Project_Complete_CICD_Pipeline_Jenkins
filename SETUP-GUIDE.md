@@ -303,6 +303,30 @@ echo "Look for service: timesheet-app"
 - Automatically detect your app server IP from Terraform
 - Generate approximately 300 traces over 5 minutes
 
+#### 4.4 Validate Complete Observability Stack
+
+To validate all observability components are working correctly:
+
+```bash
+# Make validation scripts executable
+chmod +x validate-observability.sh
+chmod +x test-correlation.sh
+
+# Run comprehensive observability validation
+./validate-observability.sh
+
+# Test alert → trace → log correlation
+./test-correlation.sh
+```
+
+**The validation will check:**
+- ✅ OpenTelemetry instrumentation (HTTP server/client, traces to Jaeger)
+- ✅ RED metrics (Rate, Errors, Duration) at `/metrics` endpoint
+- ✅ Structured JSON logs with `trace_id` and `span_id` correlation
+- ✅ Grafana dashboard with latency, error rate, CPU/memory metrics
+- ✅ Alert rules: error rate >5% or latency >300ms for 10m
+- ✅ Complete correlation: Alert → Trace → Log pipeline
+
 **Expected Responses**:
 - Main page: HTML with deployment info
 - Health: `{"status":"healthy"}`

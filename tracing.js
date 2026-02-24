@@ -17,9 +17,12 @@ const sdk = new NodeSDK({
   traceExporter: jaegerExporter,
   instrumentations: [getNodeAutoInstrumentations({
     '@opentelemetry/instrumentation-fs': { enabled: false },
+    '@opentelemetry/instrumentation-http': { enabled: true },
+    '@opentelemetry/instrumentation-express': { enabled: true },
   })],
 });
 
 sdk.start();
+console.log('OpenTelemetry initialized - traces will be sent to:', process.env.JAEGER_ENDPOINT || 'http://localhost:14268/api/traces');
 
 module.exports = sdk;

@@ -14,7 +14,7 @@
     {
       "id": 100,
       "type": "row",
-      "title": "🚨 Alert Status & Health",
+      "title": " Alert Status & Health",
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
     },
@@ -126,7 +126,7 @@
     {
       "id": 200,
       "type": "row",
-      "title": "📊 RED Metrics (Rate, Errors, Duration)",
+      "title": " RED Metrics (Rate, Errors, Duration)",
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }
     },
@@ -217,7 +217,7 @@
     {
       "id": 300,
       "type": "row",
-      "title": "🔍 Trace Correlation & Links",
+      "title": " Trace Correlation & Links",
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }
     },
@@ -317,7 +317,7 @@
     {
       "id": 400,
       "type": "row",
-      "title": "💻 System Resources",
+      "title": " System Resources",
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 }
     },
@@ -399,7 +399,7 @@
     {
       "id": 500,
       "type": "row",
-      "title": "📈 Business Metrics",
+      "title": " Business Metrics",
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 }
     },
