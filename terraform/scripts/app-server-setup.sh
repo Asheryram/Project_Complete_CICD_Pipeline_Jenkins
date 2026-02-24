@@ -6,7 +6,40 @@ exec > >(tee /var/log/app-server-setup.log) 2>&1
 echo "Starting app server setup at $(date)"
 
 yum update -y
-yum install -y docker git
+yum install -y docker git amazon-cloudwatch-agent
+
+# Configure CloudWatch agent for Docker logs
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'EOF'
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/docker.log",
+            "log_group_name": "/aws/ec2/docker",
+            "log_stream_name": "{instance_id}/docker"
+          }
+        ]
+      }
+    }
+  }
+}
+EOF
+
+# Configure Docker to log to CloudWatch
+AWS_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<EOFCONFIG
+{
+  "log-driver": "awslogs",
+  "log-opts": {
+    "awslogs-region": "$AWS_REGION",
+    "awslogs-group": "/aws/ec2/docker-containers",
+    "awslogs-create-group": "true"
+  }
+}
+EOFCONFIG
 
 # Start Docker service
 systemctl start docker
@@ -14,6 +47,15 @@ systemctl enable docker
 
 # Add ec2-user to docker group
 usermod -a -G docker ec2-user
+
+# Start CloudWatch agent
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config \
+  -m ec2 \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+  -s
+
+systemctl enable amazon-cloudwatch-agent
 
 # Install Docker Compose
 curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
