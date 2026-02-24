@@ -180,6 +180,30 @@ resource "aws_security_group" "monitoring" {
     cidr_blocks = var.allowed_ips
   }
 
+  ingress {
+    description = "Jaeger UI"
+    from_port   = 16686
+    to_port     = 16686
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_ips
+  }
+
+  ingress {
+    description = "Jaeger Collector HTTP"
+    from_port   = 14268
+    to_port     = 14268
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  ingress {
+    description = "Jaeger Collector gRPC"
+    from_port   = 14250
+    to_port     = 14250
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
   egress {
     description = "HTTPS outbound"
     from_port   = 443
