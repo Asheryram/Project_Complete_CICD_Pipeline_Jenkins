@@ -145,7 +145,8 @@ app.use((req, res, next) => {
         path: req.path,
         requestNumber: requestCount,
         userAgent: req.get('User-Agent'),
-        ip: req.ip
+        ip: req.ip,
+        traceId: traceId
     });
 
     const start = Date.now();
@@ -178,14 +179,16 @@ app.use((req, res, next) => {
                 route,
                 statusCode: res.statusCode,
                 duration,
-                error: res.statusMessage
+                error: res.statusMessage,
+                traceId: traceId
             });
         } else {
             logger.info('HTTP Response', {
                 method: req.method,
                 route,
                 statusCode: res.statusCode,
-                duration
+                duration,
+                traceId: traceId
             });
         }
 
