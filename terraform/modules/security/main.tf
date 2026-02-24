@@ -309,3 +309,24 @@ resource "aws_security_group_rule" "app_from_monitoring_node_exporter" {
   source_security_group_id = aws_security_group.monitoring.id
   description              = "Allow Node Exporter scraping from monitoring server"
 }
+
+# App → Monitoring Jaeger traces (port 14268)
+resource "aws_security_group_rule" "app_to_monitoring_jaeger" {
+  type                     = "egress"
+  from_port                = 14268
+  to_port                  = 14268
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.app.id
+  source_security_group_id = aws_security_group.monitoring.id
+  description              = "Send traces to Jaeger collector"
+}
+
+resource "aws_security_group_rule" "monitoring_from_app_jaeger" {
+  type                     = "ingress"
+  from_port                = 14268
+  to_port                  = 14268
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.monitoring.id
+  source_security_group_id = aws_security_group.app.id
+  description              = "Allow Jaeger traces from app server"
+}

@@ -93,15 +93,31 @@ Open `http://<JENKINS_IP>:8080`, complete setup, then install these plugins:
 3. **Repository URL**: your GitHub repo
 4. **Branch**: `*/main`
 5. **Script Path**: `Jenkinsfile`
-6. **Build with Parameters** → enter app server IP from `terraform output`
+6. **Build with Parameters** → Set parameters:
+   - **EC2_HOST**: App server private IP from `terraform output app_server_private_ip`
+   - **JAEGER_ENDPOINT**: `http://<monitoring-server-private-ip>:14268/api/traces`
 
-### 7. Verify
+**Get the monitoring server private IP:**
+```bash
+terraform output monitoring_server_private_ip
+# Use this IP in the JAEGER_ENDPOINT parameter
+```
+
+### 7. Verify Deployment
 
 ```bash
 APP_IP=$(terraform output -raw app_server_public_ip)
 curl http://$APP_IP:5000/          # HTML page
 curl http://$APP_IP:5000/health    # {"status":"healthy"}
 curl http://$APP_IP:5000/api/info  # version + deployment time
+
+# Test tracing endpoints
+curl http://$APP_IP:5000/api/test/slow?delay=1000  # Generates slow trace
+curl http://$APP_IP:5000/api/test/error            # Generates error trace
+
+# Check traces in Jaeger UI
+MONITORING_IP=$(terraform output -raw monitoring_server_public_ip)
+echo "Jaeger UI: http://$MONITORING_IP:16686"
 ```
 
 **Successful Deployment:**
@@ -114,14 +130,14 @@ curl http://$APP_IP:5000/api/info  # version + deployment time
 
 ## Monitoring & Observability
 
-The infrastructure includes a comprehensive monitoring stack with Prometheus, Grafana, and Alertmanager:
+The infrastructure includes a comprehensive monitoring stack with Prometheus, Grafana, Alertmanager, and Jaeger for complete observability:
 
-**Prometheus Metrics Collection:**
+### Metrics Collection (Prometheus)
 
 ![Prometheus Dashboard](screenshots/monitoring/PrometheusDashboard.png)
 *Prometheus collecting metrics from application and infrastructure*
 
-**Grafana Visualization:**
+### Visualization (Grafana)
 
 ![Grafana Dashboard](screenshots/monitoring/GrafanaDashboard.png)
 *Real-time application and system metrics visualization*
@@ -129,7 +145,7 @@ The infrastructure includes a comprehensive monitoring stack with Prometheus, Gr
 ![Grafana Prometheus Metrics](screenshots/monitoring/Grafana_prometheus_metrics.png)
 *Detailed Prometheus metrics integration in Grafana*
 
-**Alert Management:**
+### Alert Management (Alertmanager)
 
 ![AlertManager Dashboard](screenshots/monitoring/AlertManagerDashboard.png)
 *Alertmanager managing and routing alerts*
@@ -139,6 +155,33 @@ The infrastructure includes a comprehensive monitoring stack with Prometheus, Gr
 
 ![Error Alert Email](screenshots/monitoring/ErrorAlertTriggerMail.png)
 *Email notification sent when alerts are triggered*
+
+### Distributed Tracing (Jaeger)
+
+Jaeger provides distributed tracing for the Node.js application, automatically capturing:
+- HTTP request traces
+- Database operations
+- External API calls
+- Custom spans and error traces
+
+**Access URLs:**
+- **Jaeger UI**: `http://<monitoring-server-ip>:16686`
+- **Jaeger Collector**: `http://<monitoring-server-ip>:14268/api/traces`
+
+**Tracing Configuration:**
+The application automatically sends traces to Jaeger when deployed via Jenkins. The `JAEGER_ENDPOINT` parameter is configured in the Jenkins pipeline.
+
+**Monitoring Stack URLs:**
+```bash
+# Get all monitoring URLs
+terraform output
+
+# Access monitoring services
+Prometheus:   http://<monitoring-ip>:9090
+Grafana:      http://<monitoring-ip>:3000  (admin/<grafana_password>)
+Alertmanager: http://<monitoring-ip>:9093
+Jaeger:       http://<monitoring-ip>:16686
+```
 
 ## Security & Compliance
 

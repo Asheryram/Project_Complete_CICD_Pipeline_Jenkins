@@ -203,34 +203,43 @@ exit
 
 **Save** the configuration
 
-#### 3.3 Update Jenkinsfile with EC2 IP
+#### 3.3 Configure Pipeline Parameters
 
 ```bash
-# Back in your local terminal, get app server IP
+# Back in your local terminal, get server IPs
 cd terraform
-APP_IP=$(terraform output -raw app_server_public_ip)
-echo "App Server IP: $APP_IP"
+APP_PRIVATE_IP=$(terraform output -raw app_server_private_ip)
+MONITORING_PRIVATE_IP=$(terraform output -raw monitoring_server_private_ip)
 
-# Update Jenkinsfile
-cd ..
-sed -i "s/YOUR_EC2_PUBLIC_IP_HERE/$APP_IP/g" Jenkinsfile
-
-# Verify the change
-grep "EC2_HOST" Jenkinsfile
-
-# Commit and push the change
-git add Jenkinsfile
-git commit -m "Update EC2_HOST with actual IP address"
-git push origin main
+echo "App Server Private IP: $APP_PRIVATE_IP"
+echo "Monitoring Server Private IP: $MONITORING_PRIVATE_IP"
+echo "Jaeger Endpoint: http://$MONITORING_PRIVATE_IP:14268/api/traces"
 ```
+
+**Configure Pipeline Parameters in Jenkins:**
+1. **CICD-Node-Pipeline** → **Configure**
+2. **General** → Check "This project is parameterized"
+3. **Add Parameter** → **String Parameter**:
+   - Name: `EC2_HOST`
+   - Default Value: `[APP_PRIVATE_IP from above]`
+   - Description: `Private IP of the app server EC2 instance`
+4. **Add Parameter** → **String Parameter**:
+   - Name: `JAEGER_ENDPOINT`
+   - Default Value: `http://[MONITORING_PRIVATE_IP]:14268/api/traces`
+   - Description: `Jaeger collector endpoint for distributed tracing`
+5. **Save** the configuration
 
 ### Phase 4: First Deployment (5 minutes)
 
 #### 4.1 Run the Pipeline
 
 1. **Jenkins Dashboard** → **CICD-Node-Pipeline**
-2. **Build Now**
-3. **Monitor Progress**: Click on build number → **Console Output**
+2. **Build with Parameters**
+3. **Verify Parameters**:
+   - EC2_HOST: `10.0.x.x` (app server private IP)
+   - JAEGER_ENDPOINT: `http://10.0.x.x:14268/api/traces`
+4. **Build**
+5. **Monitor Progress**: Click on build number → **Console Output**
 
 **Expected Pipeline Flow**:
 ```
@@ -249,6 +258,7 @@ Finished: SUCCESS
 ```bash
 # Test application endpoints
 APP_IP=$(cd terraform && terraform output -raw app_server_public_ip)
+MONITORING_IP=$(cd terraform && terraform output -raw monitoring_server_public_ip)
 
 # Test main page
 curl http://$APP_IP:5000/
@@ -259,14 +269,29 @@ curl http://$APP_IP:5000/health
 # Test API endpoint
 curl http://$APP_IP:5000/api/info
 
-# Open in browser
-echo "Open in browser: http://$APP_IP:5000/"
+# Test tracing endpoints (generates traces)
+curl http://$APP_IP:5000/api/test/slow?delay=1000
+curl http://$APP_IP:5000/api/test/error
+
+# Open application and monitoring in browser
+echo "Application: http://$APP_IP:5000/"
+echo "Jaeger UI: http://$MONITORING_IP:16686"
+echo "Grafana: http://$MONITORING_IP:3000"
+echo "Prometheus: http://$MONITORING_IP:9090"
 ```
 
 **Expected Responses**:
 - Main page: HTML with deployment info
 - Health: `{"status":"healthy"}`
 - API Info: `{"version":"1.0.0","deploymentTime":"...","status":"running"}`
+- Slow endpoint: Delayed response (generates trace in Jaeger)
+- Error endpoint: 500 error (generates error trace in Jaeger)
+
+**Verify Tracing**:
+1. Open Jaeger UI: `http://MONITORING_IP:16686`
+2. Select service: `timesheet-app`
+3. Click "Find Traces" to see captured requests
+4. Click on individual traces to see detailed spans
 
 ## ✅ Verification Checklist
 
