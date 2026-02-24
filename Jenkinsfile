@@ -7,6 +7,7 @@ pipeline {
 
     parameters {
         string(name: 'EC2_HOST', description: 'Private IP of the app server EC2 instance')
+        string(name: 'JAEGER_ENDPOINT', defaultValue: 'http://10.0.1.249:14268/api/traces', description: 'Jaeger collector endpoint for tracing')
     }
 
     environment {
@@ -85,7 +86,10 @@ pipeline {
                             docker rm ${CONTAINER_NAME} || true
                             echo $REGISTRY_CREDS_PSW | docker login -u $REGISTRY_CREDS_USR --password-stdin
                             docker pull $REGISTRY_CREDS_USR/${DOCKER_IMAGE}:latest
-                            docker run -d --name ${CONTAINER_NAME} -p 5000:5000 $REGISTRY_CREDS_USR/${DOCKER_IMAGE}:latest
+                            docker run -d --name ${CONTAINER_NAME} -p 5000:5000 \
+                                -e JAEGER_ENDPOINT="${JAEGER_ENDPOINT}" \
+                                -e NODE_ENV=production \
+                                $REGISTRY_CREDS_USR/${DOCKER_IMAGE}:latest
                             docker image prune -af
 EOF
                     '''

@@ -67,3 +67,13 @@ output "ssh_monitoring_server" {
   description = "SSH command for monitoring server (retrieve key from Secrets Manager first)"
   value       = "ssh -i <private-key-file> ec2-user@${module.monitoring_server.public_ip}"
 }
+
+output "jaeger_url" {
+  description = "Jaeger UI URL"
+  value       = "http://${module.monitoring_server.public_ip}:16686"
+}
+
+output "monitoring_server_private_ip" {
+  description = "Private IP address of monitoring server (for Jaeger endpoint)"
+  value       = module.monitoring_server.private_ip
+}
