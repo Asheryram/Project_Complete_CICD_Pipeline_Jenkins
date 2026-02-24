@@ -140,6 +140,25 @@ The infrastructure includes a comprehensive monitoring stack with Prometheus, Gr
 ![Error Alert Email](screenshots/monitoring/ErrorAlertTriggerMail.png)
 *Email notification sent when alerts are triggered*
 
+## Security & Compliance
+
+The infrastructure includes comprehensive security monitoring and logging:
+
+**CloudWatch Logs:**
+
+![CloudWatch Log Groups](screenshots/security/CloudWatchLogGroups.png)
+*CloudWatch log groups for Jenkins, App, and Monitoring servers with Docker container log streaming*
+
+**AWS GuardDuty:**
+
+![GuardDuty Dashboard](screenshots/security/GuardDutyDashboard.png)
+*GuardDuty threat detection enabled with S3 logs and malware protection*
+
+**S3 Encryption & Lifecycle:**
+
+![S3 Bucket Security](screenshots/security/S3BucketEncryption.png)
+*S3 bucket with AES256 encryption and lifecycle policies (30d→IA, 90d→Glacier, 365d→Delete)*
+
 ## Project Structure
 
 ```

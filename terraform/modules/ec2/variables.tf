@@ -44,3 +44,9 @@ variable "name" {
   type        = string
   default     = "app-server"
 }
+
+variable "iam_instance_profile" {
+  description = "IAM instance profile ARN for CloudWatch logs"
+  type        = string
+  default     = null
+}

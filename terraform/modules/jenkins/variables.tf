@@ -43,3 +43,15 @@ variable "aws_region" {
   description = "AWS region for Secrets Manager API calls"
   type        = string
 }
+
+variable "iam_instance_profile" {
+  description = "IAM instance profile ARN for CloudWatch logs"
+  type        = string
+  default     = null
+}
+
+variable "log_group_name" {
+  description = "CloudWatch log group name"
+  type        = string
+  default     = null
+}

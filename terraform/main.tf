@@ -70,6 +70,14 @@ module "security_groups" {
   allowed_ips  = var.allowed_ips
 }
 
+# Logging Module (CloudWatch, CloudTrail, GuardDuty)
+module "logging" {
+  source = "./modules/logging"
+
+  project_name = var.project_name
+  environment  = var.environment
+}
+
 # Jenkins EC2 Module
 module "jenkins" {
   source = "./modules/jenkins"
@@ -83,6 +91,8 @@ module "jenkins" {
   security_group_ids     = [module.security_groups.jenkins_sg_id]
   jenkins_admin_password = var.jenkins_admin_password
   aws_region             = var.aws_region
+  iam_instance_profile   = module.logging.cloudwatch_instance_profile_arn
+  log_group_name         = module.logging.cloudwatch_log_group_jenkins
 }
 
 # Application EC2 Module
@@ -98,6 +108,7 @@ module "app_server" {
   security_group_ids = [module.security_groups.app_sg_id]
   user_data          = file("${path.module}/scripts/app-server-setup.sh")
   name               = "app-server"
+  iam_instance_profile = module.logging.cloudwatch_instance_profile_arn
 }
 
 # Monitoring EC2 Module (Prometheus + Grafana + Alertmanager + Node Exporter)
@@ -125,4 +136,5 @@ module "monitoring_server" {
     alert_email_username   = var.alert_email_username
     alert_email_password   = var.alert_email_password
   })
+  iam_instance_profile = module.logging.cloudwatch_instance_profile_arn
 }

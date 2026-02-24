@@ -67,7 +67,7 @@ resource "aws_instance" "jenkins" {
   key_name               = var.key_name
   subnet_id              = var.subnet_id
   vpc_security_group_ids = var.security_group_ids
-  iam_instance_profile   = aws_iam_instance_profile.jenkins.name
+  iam_instance_profile   = coalesce(var.iam_instance_profile, aws_iam_instance_profile.jenkins.name)
 
   user_data = templatefile("${path.module}/jenkins-setup.sh", {})
 
