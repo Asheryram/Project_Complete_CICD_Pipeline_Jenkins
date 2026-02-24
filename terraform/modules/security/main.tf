@@ -18,6 +18,15 @@ resource "aws_security_group" "jenkins" {
     cidr_blocks = var.allowed_ips
   }
 
+  # SSH to app server
+  egress {
+    description = "SSH to app server"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
   # HTTPS - package updates, Docker Hub, AWS APIs, Secrets Manager
   egress {
     description = "HTTPS outbound"
@@ -59,11 +68,19 @@ resource "aws_security_group" "app" {
   vpc_id      = var.vpc_id
 
   ingress {
-    description = "SSH"
+    description = "SSH from allowed IPs"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
     cidr_blocks = var.allowed_ips
+  }
+
+  ingress {
+    description = "SSH from Jenkins VPC"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
   }
 
   ingress {
@@ -206,25 +223,25 @@ resource "aws_security_group" "monitoring" {
 
 # ── Cross-SG rules (separate resources to avoid circular dependency) ──────
 
-# Jenkins → App SSH
-resource "aws_security_group_rule" "jenkins_to_app" {
+# Monitoring → App SSH
+resource "aws_security_group_rule" "monitoring_to_app" {
   type                     = "egress"
   from_port                = 22
   to_port                  = 22
   protocol                 = "tcp"
-  security_group_id        = aws_security_group.jenkins.id
+  security_group_id        = aws_security_group.monitoring.id
   source_security_group_id = aws_security_group.app.id
   description              = "SSH to app server"
 }
 
-resource "aws_security_group_rule" "app_from_jenkins" {
+resource "aws_security_group_rule" "app_from_monitoring" {
   type                     = "ingress"
   from_port                = 22
   to_port                  = 22
   protocol                 = "tcp"
   security_group_id        = aws_security_group.app.id
-  source_security_group_id = aws_security_group.jenkins.id
-  description              = "SSH from Jenkins"
+  source_security_group_id = aws_security_group.monitoring.id
+  description              = "SSH from monitoring"
 }
 
 # Monitoring → App metrics scrape (port 5000)
