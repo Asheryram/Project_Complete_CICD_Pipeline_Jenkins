@@ -95,7 +95,12 @@ chown ec2-user:ec2-user "$MONITORING_DIR/.env"
 chmod 600 "$MONITORING_DIR/.env"
 
 # ── 7. Process alertmanager template ──────────────────────────────────────
+export ALERT_EMAIL_TO="${alert_email_to}"
+export ALERT_EMAIL_FROM="${alert_email_from}"
+export ALERT_EMAIL_USERNAME="${alert_email_username}"
+export ALERT_EMAIL_PASSWORD="${alert_email_password}"
 envsubst < "$MONITORING_DIR/alertmanager.yml.template" > "$MONITORING_DIR/alertmanager.yml"
+chown ec2-user:ec2-user "$MONITORING_DIR/alertmanager.yml"
 
 # ── 8. Start the monitoring stack ─────────────────────────────────────────
 # Run as ec2-user so volume-mounted files are owned correctly
