@@ -63,6 +63,7 @@ services:
       - grafana-data:/var/lib/grafana
       - ./grafana-dashboards/dashboard.yml:/etc/grafana/provisioning/dashboards/dashboard.yml:ro
       - ./grafana-dashboards/nodejs-dashboard.json:/var/lib/grafana/dashboards/nodejs-dashboard.json:ro
+      - ./grafana-dashboards/observability-dashboard.json:/var/lib/grafana/dashboards/observability-dashboard.json:ro
       - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
     restart: unless-stopped
     depends_on:
@@ -81,6 +82,17 @@ services:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # Jaeger collector HTTP
+      - "14250:14250"  # Jaeger collector gRPC
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
     restart: unless-stopped
 
 volumes:

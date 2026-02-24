@@ -1,5 +1,10 @@
+// Initialize OpenTelemetry first
+require('./tracing');
+
 const express = require('express');
 const client = require('prom-client');
+const { trace, context } = require('@opentelemetry/api');
+const logger = require('./logger');
 const app = express();
 
 const deploymentTime = new Date().toISOString();
@@ -14,12 +19,26 @@ const register = new client.Registry();
 client.collectDefaultMetrics({ register, labels: { app: 'timesheet-app', version } });
 
 // ─── Existing Metrics ────────────────────────────────────────────────────────
+// RED Metrics (Rate, Errors, Duration)
+const httpRequestRate = new client.Counter({
+    name: 'http_request_rate_total',
+    help: 'Rate of HTTP requests per second',
+    labelNames: ['method', 'route', 'status_code'],
+    registers: [register]
+});
+
 const httpRequestDuration = new client.Histogram({
     name: 'http_request_duration_seconds',
     help: 'Duration of HTTP requests in seconds',
     labelNames: ['method', 'route', 'status_code'],
-    // More granular buckets for a fast app (ms range)
     buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+    registers: [register]
+});
+
+const httpErrorRate = new client.Counter({
+    name: 'http_error_rate_total',
+    help: 'Rate of HTTP errors',
+    labelNames: ['method', 'route', 'status_code'],
     registers: [register]
 });
 
@@ -116,16 +135,24 @@ app.use(express.static('public'));
 app.use((req, res, next) => {
     requestCount++;
     const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] ${req.method} ${req.path} - Request #${requestCount}`);
+    
+    // Get current span for trace correlation
+    const span = trace.getActiveSpan();
+    const traceId = span ? span.spanContext().traceId : 'no-trace';
+    
+    logger.info('HTTP Request', {
+        method: req.method,
+        path: req.path,
+        requestNumber: requestCount,
+        userAgent: req.get('User-Agent'),
+        ip: req.ip
+    });
 
     const start = Date.now();
     const cpuStart = process.cpuUsage();
-
-    // Track request body size
     const requestSize = parseInt(req.headers['content-length'] || '0', 10);
-
-    // Increment in-flight gauge
     const routeKey = req.path;
+    
     httpRequestsInFlight.labels(req.method, routeKey).inc();
 
     res.on('finish', () => {
@@ -133,27 +160,46 @@ app.use((req, res, next) => {
         const cpuEnd = process.cpuUsage(cpuStart);
         const cpuTime = (cpuEnd.user + cpuEnd.system) / 1000000;
         const route = req.route ? req.route.path : req.path;
+        const statusCode = res.statusCode.toString();
 
         // Decrement in-flight
         httpRequestsInFlight.labels(req.method, routeKey).dec();
 
-        // Core metrics
-        httpRequestDuration.labels(req.method, route, res.statusCode).observe(duration);
-        httpRequestTotal.labels(req.method, route, res.statusCode).inc();
-        httpRequestCpuTime.labels(req.method, route, res.statusCode).inc(cpuTime);
-
-        // Error tracking
+        // RED Metrics
+        httpRequestRate.labels(req.method, route, statusCode).inc();
+        httpRequestDuration.labels(req.method, route, statusCode).observe(duration);
+        
         if (res.statusCode >= 400) {
-            httpErrorsTotal.labels(req.method, route, res.statusCode).inc();
+            httpErrorRate.labels(req.method, route, statusCode).inc();
+            httpErrorsTotal.labels(req.method, route, statusCode).inc();
+            
+            logger.error('HTTP Error', {
+                method: req.method,
+                route,
+                statusCode: res.statusCode,
+                duration,
+                error: res.statusMessage
+            });
+        } else {
+            logger.info('HTTP Response', {
+                method: req.method,
+                route,
+                statusCode: res.statusCode,
+                duration
+            });
         }
 
-        // Request/response size tracking
+        // Legacy metrics
+        httpRequestTotal.labels(req.method, route, statusCode).inc();
+        httpRequestCpuTime.labels(req.method, route, statusCode).inc(cpuTime);
+
+        // Size tracking
         if (requestSize > 0) {
             httpRequestSizeBytes.labels(req.method, route).observe(requestSize);
         }
         const responseSize = parseInt(res.getHeader('content-length') || '0', 10);
         if (responseSize > 0) {
-            httpResponseSizeBytes.labels(req.method, route, res.statusCode).observe(responseSize);
+            httpResponseSizeBytes.labels(req.method, route, statusCode).observe(responseSize);
         }
     });
 
@@ -162,7 +208,7 @@ app.use((req, res, next) => {
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
-    console.log('[INFO] Home page accessed');
+    logger.info('Home page accessed');
     res.send(`
 <!DOCTYPE html>
 <html>
@@ -336,12 +382,69 @@ app.get('/api/info', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-    console.log('[HEALTH] Health check performed');
+    logger.info('Health check performed');
     res.status(200).json({
         status: 'healthy',
         uptime: process.uptime(),
         timestamp: new Date().toISOString()
     });
+});
+
+// Test routes for observability validation
+app.get('/api/test/error', (req, res) => {
+    const span = trace.getActiveSpan();
+    span?.setAttributes({
+        'test.type': 'error_simulation',
+        'test.error_rate': '100%'
+    });
+    
+    logger.error('Simulated error for testing', {
+        testType: 'error_simulation',
+        endpoint: '/api/test/error'
+    });
+    
+    res.status(500).json({ error: 'Simulated error for testing' });
+});
+
+app.get('/api/test/slow', async (req, res) => {
+    const span = trace.getActiveSpan();
+    const delay = parseInt(req.query.delay) || 2000;
+    
+    span?.setAttributes({
+        'test.type': 'latency_simulation',
+        'test.delay_ms': delay
+    });
+    
+    logger.info('Simulating slow response', {
+        testType: 'latency_simulation',
+        delayMs: delay
+    });
+    
+    await new Promise(resolve => setTimeout(resolve, delay));
+    res.json({ message: `Delayed response after ${delay}ms` });
+});
+
+app.get('/api/test/load', (req, res) => {
+    const span = trace.getActiveSpan();
+    const iterations = parseInt(req.query.iterations) || 1000000;
+    
+    span?.setAttributes({
+        'test.type': 'cpu_load_simulation',
+        'test.iterations': iterations
+    });
+    
+    logger.info('Simulating CPU load', {
+        testType: 'cpu_load_simulation',
+        iterations
+    });
+    
+    // CPU intensive task
+    let result = 0;
+    for (let i = 0; i < iterations; i++) {
+        result += Math.sqrt(i);
+    }
+    
+    res.json({ message: 'CPU load test completed', result: result.toFixed(2) });
 });
 
 app.get('/metrics', async (req, res) => {

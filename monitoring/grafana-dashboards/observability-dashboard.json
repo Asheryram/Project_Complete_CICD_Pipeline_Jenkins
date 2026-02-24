@@ -1,0 +1,473 @@
+{
+  "id": null,
+  "uid": "observability-enhanced",
+  "title": "Timesheet App — Enhanced Observability",
+  "tags": ["nodejs", "observability", "tracing"],
+  "timezone": "browser",
+  "schemaVersion": 36,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+
+  "panels": [
+
+    {
+      "id": 100,
+      "type": "row",
+      "title": "🚨 Alert Status & Health",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+
+    {
+      "id": 1,
+      "title": "Error Rate Alert Status",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{ 
+        "expr": "(rate(http_errors_total[5m]) / rate(http_requests_total[5m])) * 100", 
+        "refId": "A" 
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "decimals": 2,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 3 },
+            { "color": "red", "value": 5 }
+          ]},
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": { 
+        "colorMode": "background", 
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 }
+    },
+
+    {
+      "id": 2,
+      "title": "Latency Alert Status (P95)",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{ 
+        "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{route!='/metrics'}[5m])) * 1000", 
+        "refId": "A" 
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms", "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 200 },
+            { "color": "red", "value": 300 }
+          ]},
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": { 
+        "colorMode": "background", 
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 }
+    },
+
+    {
+      "id": 3,
+      "title": "Active Alerts",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{ 
+        "expr": "ALERTS{alertstate=\"firing\"}", 
+        "refId": "A" 
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "red", "value": 1 }
+          ]},
+          "color": { "mode": "thresholds" }
+        }
+      },
+      "options": { 
+        "colorMode": "background",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 }
+    },
+
+    {
+      "id": 4,
+      "title": "System Uptime",
+      "type": "stat",
+      "datasource": "Prometheus",
+      "targets": [{ 
+        "expr": "(time() - process_start_time_seconds) / 3600", 
+        "refId": "A" 
+      }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "h", "decimals": 1,
+          "color": { "fixedColor": "blue", "mode": "fixed" }
+        }
+      },
+      "options": { 
+        "colorMode": "background",
+        "reduceOptions": { "calcs": ["lastNotNull"] }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 }
+    },
+
+    {
+      "id": 200,
+      "type": "row",
+      "title": "📊 RED Metrics (Rate, Errors, Duration)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }
+    },
+
+    {
+      "id": 10,
+      "title": "Request Rate & Error Rate",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{route!='/metrics'}[5m]))",
+          "legendFormat": "Request Rate (req/s)",
+          "refId": "A"
+        },
+        {
+          "expr": "(sum(rate(http_errors_total[5m])) / sum(rate(http_requests_total{route!='/metrics'}[5m]))) * 100",
+          "legendFormat": "Error Rate (%)",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { 
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "A" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } },
+              { "id": "unit", "value": "reqps" }
+            ]
+          },
+          {
+            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } },
+              { "id": "unit", "value": "percent" }
+            ]
+          }
+        ]
+      },
+      "options": { 
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "last"] }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 }
+    },
+
+    {
+      "id": 11,
+      "title": "Response Time Percentiles",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        { 
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{route!='/metrics'}[5m])) by (le)) * 1000", 
+          "legendFormat": "P50", 
+          "refId": "A" 
+        },
+        { 
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{route!='/metrics'}[5m])) by (le)) * 1000", 
+          "legendFormat": "P95", 
+          "refId": "B" 
+        },
+        { 
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{route!='/metrics'}[5m])) by (le)) * 1000", 
+          "legendFormat": "P99", 
+          "refId": "C" 
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { 
+          "unit": "ms", 
+          "custom": { "lineWidth": 2, "fillOpacity": 8 } 
+        },
+        "overrides": [
+          { "matcher": { "id": "byFrameRefID", "options": "A" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byFrameRefID", "options": "B" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byFrameRefID", "options": "C" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+        ]
+      },
+      "options": { 
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "last"] }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 }
+    },
+
+    {
+      "id": 300,
+      "type": "row",
+      "title": "🔍 Trace Correlation & Links",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }
+    },
+
+    {
+      "id": 20,
+      "title": "High Latency Requests (>300ms)",
+      "type": "table",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "topk(10, histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, method, route)) * 1000 > 300)",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "table"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [
+              { "id": "unit", "value": "ms" },
+              { "id": "displayName", "value": "P95 Latency (ms)" }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "__name__": true,
+              "job": true,
+              "instance": true
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 15 }
+    },
+
+    {
+      "id": 21,
+      "title": "Error Requests by Route",
+      "type": "table",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "topk(10, sum(rate(http_errors_total[5m])) by (method, route, status_code))",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "table"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [
+              { "id": "unit", "value": "reqps" },
+              { "id": "displayName", "value": "Error Rate (req/s)" }
+            ]
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "__name__": true,
+              "job": true,
+              "instance": true
+            }
+          }
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 15 }
+    },
+
+    {
+      "id": 400,
+      "type": "row",
+      "title": "💻 System Resources",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 }
+    },
+
+    {
+      "id": 30,
+      "title": "CPU Usage",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        { 
+          "expr": "rate(process_cpu_seconds_total[5m]) * 100", 
+          "legendFormat": "CPU %", 
+          "refId": "A" 
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent", "min": 0, "max": 100,
+          "color": { "fixedColor": "blue", "mode": "fixed" },
+          "custom": { "lineWidth": 2, "fillOpacity": 20 }
+        }
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 22 }
+    },
+
+    {
+      "id": 31,
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        { 
+          "expr": "nodejs_heap_size_used_bytes", 
+          "legendFormat": "Heap Used", 
+          "refId": "A" 
+        },
+        { 
+          "expr": "nodejs_heap_size_total_bytes", 
+          "legendFormat": "Heap Total", 
+          "refId": "B" 
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { 
+          "unit": "bytes", 
+          "custom": { "lineWidth": 2, "fillOpacity": 8 } 
+        },
+        "overrides": [
+          { "matcher": { "id": "byFrameRefID", "options": "A" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byFrameRefID", "options": "B" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] }
+        ]
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 22 }
+    },
+
+    {
+      "id": 32,
+      "title": "Requests In-Flight",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        { 
+          "expr": "sum(http_requests_in_flight)", 
+          "legendFormat": "Active Requests", 
+          "refId": "A" 
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "fixedColor": "purple", "mode": "fixed" },
+          "custom": { "lineWidth": 2, "fillOpacity": 15 }
+        }
+      },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 22 }
+    },
+
+    {
+      "id": 500,
+      "type": "row",
+      "title": "📈 Business Metrics",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 }
+    },
+
+    {
+      "id": 40,
+      "title": "Timesheet Submissions by Project",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(timesheet_submissions_total[5m])) by (project)",
+          "legendFormat": "{{project}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { 
+        "defaults": { 
+          "unit": "reqps", 
+          "custom": { "lineWidth": 2, "fillOpacity": 10 } 
+        } 
+      },
+      "options": { 
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "last"] } 
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 }
+    },
+
+    {
+      "id": 41,
+      "title": "Hours Distribution",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(timesheet_hours_total[5m])) by (project)",
+          "legendFormat": "{{project}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { 
+        "defaults": { 
+          "unit": "short", 
+          "custom": { "lineWidth": 2, "fillOpacity": 10 } 
+        } 
+      },
+      "options": { 
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "last"] } 
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 }
+    }
+
+  ],
+
+  "links": [
+    {
+      "title": "Jaeger Traces",
+      "url": "http://localhost:16686",
+      "type": "link",
+      "icon": "external link",
+      "tooltip": "Open Jaeger UI for distributed tracing"
+    },
+    {
+      "title": "Prometheus",
+      "url": "http://localhost:9090",
+      "type": "link",
+      "icon": "external link",
+      "tooltip": "Open Prometheus UI"
+    }
+  ]
+}
