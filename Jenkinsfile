@@ -74,7 +74,13 @@ pipeline {
                 echo 'Deploying to EC2...'
                 withCredentials([sshUserPrivateKey(credentialsId: 'ec2_ssh', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
                     sh '''
-                        ssh -i $SSH_KEY -o StrictHostKeyChecking=no $SSH_USER@${EC2_HOST} << EOF
+                        # Test SSH connectivity first
+                        echo "Testing SSH connection to ${EC2_HOST}..."
+                        ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=30 $SSH_USER@${EC2_HOST} "echo 'SSH connection successful'"
+                        
+                        # Deploy application
+                        echo "Deploying application..."
+                        ssh -i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=30 $SSH_USER@${EC2_HOST} << EOF
                             docker stop ${CONTAINER_NAME} || true
                             docker rm ${CONTAINER_NAME} || true
                             echo $REGISTRY_CREDS_PSW | docker login -u $REGISTRY_CREDS_USR --password-stdin
