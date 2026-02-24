@@ -280,6 +280,29 @@ echo "Grafana: http://$MONITORING_IP:3000"
 echo "Prometheus: http://$MONITORING_IP:9090"
 ```
 
+#### 4.3 Generate Realistic Traffic (Optional)
+
+To populate Jaeger with meaningful traces and test the monitoring stack:
+
+```bash
+# Make the traffic simulation script executable
+chmod +x simulate-traffic.sh
+
+# Run 5-minute traffic simulation with 3 concurrent users
+./simulate-traffic.sh
+
+# Monitor the simulation output and check Jaeger UI
+echo "Monitor traces at: http://$MONITORING_IP:16686"
+echo "Look for service: timesheet-app"
+```
+
+**The simulation script will:**
+- Generate realistic user behavior patterns
+- Create various trace types (fast, slow, error scenarios)
+- Simulate load bursts and CPU-intensive operations
+- Automatically detect your app server IP from Terraform
+- Generate approximately 300 traces over 5 minutes
+
 **Expected Responses**:
 - Main page: HTML with deployment info
 - Health: `{"status":"healthy"}`

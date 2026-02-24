@@ -120,6 +120,61 @@ MONITORING_IP=$(terraform output -raw monitoring_server_public_ip)
 echo "Jaeger UI: http://$MONITORING_IP:16686"
 ```
 
+### 8. Generate Realistic Traffic for Monitoring
+
+Use the included traffic simulation script to generate realistic API traffic and create meaningful traces in Jaeger:
+
+```bash
+# Make the script executable
+chmod +x simulate-traffic.sh
+
+# Run traffic simulation (5 minutes with 3 concurrent users)
+./simulate-traffic.sh
+```
+
+**What the script does:**
+- Simulates 3 concurrent users making realistic API requests
+- Generates various types of traces: homepage visits, API calls, slow operations, errors
+- Creates load bursts every 60 seconds (20 concurrent requests)
+- Runs CPU-intensive tests every 2 minutes
+- Automatically detects app server IP from Terraform state
+- Provides colored output showing user activities
+
+**Traffic patterns generated:**
+- 30% Homepage browsing (`/`)
+- 20% Health/info checks (`/health`, `/api/info`)
+- 20% Timesheet submissions (`POST /api/timesheets`)
+- 15% Timesheet viewing (`GET /api/timesheets`)
+- 10% Slow operations (`/api/test/slow`)
+- 5% Error simulation (`/api/test/error`)
+
+**Expected output:**
+```
+🚀 Starting Jaeger Traffic Simulation
+Target: http://3.15.123.67:5000
+Duration: 300s with 3 concurrent users
+
+👤 User 1 started
+👤 User 2 started
+👤 User 3 started
+User 1: Browsing homepage
+User 2: Submitting timesheet
+⚡ Load burst: 20 concurrent requests
+...
+🎉 Traffic simulation completed!
+📊 Check Jaeger UI for traces: http://monitoring-ip:16686
+🔍 Look for service: timesheet-app
+📈 Traces generated: ~300 traces
+```
+
+**Customize simulation:**
+```bash
+# Edit script variables for different patterns
+DURATION=600        # 10 minutes
+CONCURRENT_USERS=5  # 5 users
+APP_URL="http://custom-ip:5000"  # Custom target
+```
+
 **Successful Deployment:**
 
 ![Successful Pipeline](screenshots/successful_pipeline.png)
@@ -210,6 +265,7 @@ The infrastructure includes comprehensive security monitoring and logging:
 ├── Dockerfile                          # Container image
 ├── Jenkinsfile                         # Pipeline definition
 ├── package.json                        # Dependencies
+├── simulate-traffic.sh                 # Traffic simulation script for Jaeger
 ├── SETUP-GUIDE.md                      # Detailed walkthrough
 ├── RUNBOOK.md                          # Operations & troubleshooting
 └── terraform/

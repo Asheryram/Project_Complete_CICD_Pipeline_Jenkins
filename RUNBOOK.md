@@ -275,6 +275,38 @@ docker ps                    # confirms cicd-app is running
 docker logs cicd-app -f      # live app logs
 ```
 
+### Generate Traffic for Monitoring
+
+To test the monitoring stack and generate meaningful traces in Jaeger:
+
+```bash
+# Make the script executable
+chmod +x simulate-traffic.sh
+
+# Run traffic simulation
+./simulate-traffic.sh
+```
+
+**Script features:**
+- Automatically detects app server IP from Terraform state
+- Simulates realistic user behavior (3 concurrent users by default)
+- Generates diverse trace patterns for comprehensive monitoring testing
+- Runs for 5 minutes by default with periodic load bursts
+- Provides real-time colored output showing user activities
+
+**Customize the simulation:**
+```bash
+# Edit these variables in the script
+DURATION=300        # Simulation duration in seconds
+CONCURRENT_USERS=3  # Number of concurrent users
+APP_URL="http://localhost:5000"  # Target URL (auto-detected from Terraform)
+```
+
+**Monitor results:**
+- **Jaeger UI**: Check traces at `http://<MONITORING_IP>:16686`
+- **Grafana**: View metrics at `http://<MONITORING_IP>:3000`
+- **Prometheus**: See raw metrics at `http://<MONITORING_IP>:9090`
+
 ---
 
 ## 11. Updating the App Server IP
