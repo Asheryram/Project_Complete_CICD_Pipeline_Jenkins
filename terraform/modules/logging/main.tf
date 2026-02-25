@@ -127,9 +127,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 #   }
 # }
 
-# GuardDuty - Use existing detector
-data "aws_guardduty_detector" "existing" {
-}
+
 
 resource "aws_guardduty_detector" "main" {
   enable = true
@@ -157,7 +155,7 @@ resource "aws_guardduty_detector" "main" {
   }
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 
